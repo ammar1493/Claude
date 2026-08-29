@@ -64,6 +64,7 @@ export const WELLSHARP_HOURS: WellSharpHours[] = [
   { courseName: "IADC - WELLSHARP WELL SERVICING WIRELINE", days: 2, hoursPerDay: 6, totalHours: 12 },
   { courseName: "IADC - WELLSHARP WELL SERVICING WORKOVER", days: 2, hoursPerDay: 6, totalHours: 12 },
   { courseName: "IADC - WELLSHARP WELL SERVICING SNUBBING", days: 2, hoursPerDay: 6, totalHours: 12 },
+  { courseName: "IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL", days: 3, hoursPerDay: 6, totalHours: 18 },
   // Retake Exam variants (typically 1 day)
   { courseName: "IADC - WELLSHARP DRILLING DRILLER LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
   { courseName: "IADC - WELLSHARP DRILLING SUPERVISORY LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
@@ -72,6 +73,7 @@ export const WELLSHARP_HOURS: WellSharpHours[] = [
   { courseName: "IADC - WELLSHARP WELL SERVICING WIRELINE (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
   { courseName: "IADC - WELLSHARP WELL SERVICING WORKOVER (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
   { courseName: "IADC - WELLSHARP WELL SERVICING SNUBBING (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
+  { courseName: "IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
 ];
 
 /**

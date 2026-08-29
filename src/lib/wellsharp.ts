@@ -1,7 +1,17 @@
 import { WELLSHARP_HOURS } from "./config";
 import type { TrainingRow, WellSharpRow } from "./types";
 
-/** normalize_wellsharp_course() from app.R. */
+/**
+ * normalize_wellsharp_course() from app.R, plus one added spelling variant.
+ *
+ * The stuck-pipe suffix is stripped first, so
+ * "… DRILLING DRILLER LEVEL + Stuck Pipe Avoidance Course" already resolves to
+ * the base Driller Level course. "… DRILLING SUPERVISORY+ Stuck Pipe Avoidance
+ * Course" was left as "… DRILLING SUPERVISORY" — missing the word LEVEL — and
+ * so matched nothing. It is the same Supervisory Level course, so it is
+ * repaired here alongside the existing SUPERVIOSR/SUPERVIOSRY typo fixes rather
+ * than added to the hours table as a phantom course.
+ */
 export function normalizeWellsharpCourse(x: string): string {
   return String(x ?? "")
     .toUpperCase()
@@ -9,7 +19,8 @@ export function normalizeWellsharpCourse(x: string): string {
     .replace(/\s+/g, " ")
     .replace(/\s*\+\s*STUCK PIPE AVOIDANCE COURSE\s*$/, "")
     .replace(/SUPERVIOSRY/g, "SUPERVISORY")
-    .replace(/SUPERVIOSR/g, "SUPERVISORY");
+    .replace(/SUPERVIOSR/g, "SUPERVISORY")
+    .replace(/^(IADC - WELLSHARP DRILLING SUPERVISORY)$/, "$1 LEVEL");
 }
 
 const HOURS_LOOKUP = new Map(
