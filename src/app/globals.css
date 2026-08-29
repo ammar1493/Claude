@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #002147;
+  --color-navy-600: #003d7a;
+  --color-navy-050: #eef2f7;
+  --color-gold: #ffc000;
+  --color-gold-050: #fff8e5;
+  --color-hse: #2e7d32;
+  --color-qiddiya: #6a1b9a;
+  --color-takamol: #00796b;
+  --color-shell: #f8f9fa;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-shell);
+  color: var(--color-navy);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars inside cards, kept subtle so charts stay the focus. */
+.neft-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.neft-scroll::-webkit-scrollbar-thumb {
+  background: #c7d0da;
+  border-radius: 999px;
+}
+.neft-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Native date inputs pick up the navy sidebar otherwise. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  body {
+    background: #fff;
+  }
+}
