@@ -3,7 +3,15 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { GOOGLE_XLSX_URL } from "@/lib/config";
 
-export const revalidate = 900; // 15 minutes
+/**
+ * Resolved per request rather than prerendered: without this the workbook is
+ * fetched once at build time and frozen into the build output. The CDN still
+ * caches the response through the cache-control header below.
+ */
+export const dynamic = "force-dynamic";
+
+/** How long the upstream fetch and the CDN may reuse a copy. */
+const CACHE_SECONDS = 900; // 15 minutes
 
 /**
  * Serves the training workbook that app.R read from `2024 Data.xlsx`.
@@ -43,7 +51,7 @@ async function fetchWorkbook(url: string): Promise<ArrayBuffer | null> {
   try {
     const res = await fetch(url, {
       redirect: "follow",
-      next: { revalidate },
+      next: { revalidate: CACHE_SECONDS },
       headers: { accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*" },
     });
     if (!res.ok) return null;
@@ -78,7 +86,7 @@ function workbookResponse(buf: ArrayBuffer, source: string) {
     headers: {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "x-neft-source": source,
-      "cache-control": "public, max-age=0, s-maxage=900, stale-while-revalidate=3600",
+      "cache-control": `public, max-age=0, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=3600`,
     },
   });
 }

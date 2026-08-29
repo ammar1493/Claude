@@ -101,22 +101,36 @@ server-side so the request stays same-origin.
 
 ## Deploying to Vercel
 
-```bash
-npm install
-npm run build      # verify locally first
-```
+The app lives on the `claude/r-app-dashboard-vercel-nclum7` branch; `main` holds
+only the original brand GIFs. Vercel builds **Production from the repository's
+production branch**, so that branch has to be set explicitly or the production
+deployment will build a repo with no `package.json`.
 
-Then either import the repository at [vercel.com/new](https://vercel.com/new) — the
-framework is detected automatically, no build settings to change — or:
+1. Go to [vercel.com/new](https://vercel.com/new) and import `ammar1493/Claude`.
+2. Leave every build setting alone — the Next.js preset is detected, and the
+   defaults (`npm run build`, output `.next`) are correct. Node 20.9+ is
+   required and pinned in `package.json`.
+3. Deploy. The first deployment is a preview.
+4. Open **Settings → Git → Production Branch**, change it from `main` to
+   `claude/r-app-dashboard-vercel-nclum7`, and save.
+5. Redeploy from the **Deployments** tab (⋯ → Redeploy) so the production URL
+   picks up that branch. Every later push to it deploys automatically.
 
-```bash
-npx vercel deploy --prod
-```
+Environment variables are optional — see `.env.example`. Set them under
+**Settings → Environment Variables** only if the workbook should come from a URL
+instead of being uploaded in the browser.
 
-Set the optional environment variables from `.env.example` under
-**Project → Settings → Environment Variables** if the workbook lives at a URL
-rather than in the repo. `/api/dataset` and `/api/sheet` cache their fetches for
-15 minutes, so a republished workbook appears within that window.
+### Verifying the deployment
+
+- The dashboard should open on the **Load the training workbook** drop zone.
+- Drop `NEFT_Data.xlsx` in; the Executive Summary should fill in (about 4-5
+  seconds for a 70k-row export).
+- The Qiddiya Academy tab should accept the QCTA workbook via **Add file**.
+- Quality Metrics reads the published Google workbook server-side; if that tab
+  shows a fetch error, the workbook's share settings are the thing to check.
+
+All three API routes are dynamic, so nothing is frozen into the build; responses
+are CDN-cached for 15 minutes.
 
 ## Differences from the Shiny app, and why
 
