@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
 import Plot from "@/components/Plot";
+import { DANGER, NEFT_GOLD, NEFT_GREEN, NEFT_TEAL } from "@/lib/brand";
 import { QUESTIONS_MAP } from "@/lib/config";
 import { headroom } from "@/lib/plots";
 
@@ -15,13 +16,17 @@ interface SheetPayload {
 const selectClass =
   "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-navy outline-none focus:border-navy";
 
-/** Colour bands from instructor_performance_chart(). */
+/**
+ * Colour bands from instructor_performance_chart(), remapped onto the brand
+ * palette — teal and green carry the strong scores, gold the middle, and the
+ * one alert colour marks a score below 3.
+ */
 function scoreColor(score: number): string {
-  if (score >= 4.5) return "#388e3c";
-  if (score >= 4.0) return "#7cb342";
-  if (score >= 3.5) return "#fbc02d";
-  if (score >= 3.0) return "#f57c00";
-  return "#d32f2f";
+  if (score >= 4.5) return NEFT_GREEN;
+  if (score >= 4.0) return NEFT_TEAL;
+  if (score >= 3.5) return NEFT_GOLD;
+  if (score >= 3.0) return "#C98A1E";
+  return DANGER;
 }
 
 function useSheet(name: string) {
@@ -158,7 +163,7 @@ export function QualityMetrics() {
         />
       </Card>
 
-      <Card title="Detailed Evaluation Scores" tone="gold">
+      <Card title="Detailed Evaluation Scores" tone="marked">
         <label className="mb-3 block text-sm font-semibold">
           Select Metric:
           <select

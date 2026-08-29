@@ -82,7 +82,7 @@ export function Takamol() {
           title="Sessions Delivered"
           value={fmtInt(totals.sessions)}
           showcase={<Icon name="calendar-check" size={28} />}
-          theme="secondary"
+          theme="accent"
           compact
           footer={<span className="text-xs">Optional — leave 0 if not tracked</span>}
         />
@@ -90,7 +90,7 @@ export function Takamol() {
           title="Periods Recorded"
           value={fmtInt(totals.periods)}
           showcase={<Icon name="calendar" size={28} />}
-          theme="dark"
+          theme="deep"
           compact
           footer={totals.periods ? <span className="text-xs">{totals.years} year(s) recorded</span> : null}
         />
@@ -104,7 +104,7 @@ export function Takamol() {
         />
       </div>
 
-      <Card title="Add Takamol Numbers" tone="gold">
+      <Card title="Add Takamol Numbers" tone="marked">
         <ManualEntryPanel
           prefix="TK"
           rows={tkManual}
@@ -115,7 +115,7 @@ export function Takamol() {
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-12">
-        <Card title="Participants by Month" tone="navy" className="xl:col-span-7">
+        <Card title="Participants by Month" tone="marked" className="xl:col-span-7">
           <Plot
             height={420}
             emptyMessage={monthly.length ? null : empty}
@@ -141,7 +141,7 @@ export function Takamol() {
           />
         </Card>
 
-        <Card title="Cumulative Participants" tone="gold" className="xl:col-span-5">
+        <Card title="Cumulative Participants" tone="navy" className="xl:col-span-5">
           <Plot
             height={420}
             emptyMessage={cumulative.length ? null : empty}
@@ -166,7 +166,7 @@ export function Takamol() {
         </Card>
       </div>
 
-      <Card title="Participants by Year" tone="dark">
+      <Card title="Participants by Year" tone="navy">
         <Plot
           height={370}
           emptyMessage={yearly.length ? null : empty}

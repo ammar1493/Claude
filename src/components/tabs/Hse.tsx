@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Alert, Card } from "@/components/Card";
+import { Alert, Card, SectionTitle } from "@/components/Card";
 import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
 import { ValueBox } from "@/components/ValueBox";
@@ -9,7 +9,7 @@ import { ascending, groupBy, nDistinct, sliceRange, topN } from "@/lib/agg";
 import { HSE_COLOR, MUTED_BAR, NEFT_GOLD } from "@/lib/brand";
 import { periodFloor } from "@/lib/dates";
 import { fmtInt } from "@/lib/format";
-import { hbar, headroom, line } from "@/lib/plots";
+import { hbar, headroom, line, rankedColorsOf } from "@/lib/plots";
 import { filterHse } from "@/lib/hse";
 import { hseBase } from "@/lib/selectors";
 import { useDashboard } from "@/state/DashboardContext";
@@ -38,7 +38,9 @@ function RankedPair({
   const top = ascending(topN(ranked, (r) => r.value, 10), (r) => r.value);
   const next = ascending(sliceRange(ranked, 11, 20), (r) => r.value);
 
-  const chart = (rows: Ranked[], color: string, empty: string) => (
+  // Only the leader of the actual top 10 earns the gold accent; ranks 11-20 are
+  // a continuation, so they stay in one neutral tone.
+  const chart = (rows: Ranked[], color: string, empty: string, markLeader: boolean) => (
     <Plot
       height={420}
       emptyMessage={rows.length ? null : empty}
@@ -46,7 +48,7 @@ function RankedPair({
         hbar({
           labels: rows.map((r) => r.label),
           values: rows.map((r) => r.value),
-          color,
+          color: markLeader ? rankedColorsOf(color, rows.length) : color,
           hovertemplate: `<b>%{y}</b><br>${unit}: %{x}<extra></extra>`,
         }),
       ]}
@@ -61,10 +63,12 @@ function RankedPair({
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Card title={title} tone="hse">
-        {chart(top, HSE_COLOR, "No HSE data for the current filters")}
+      <Card title={title} tone="marked">
+        {chart(top, HSE_COLOR, "No HSE data for the current filters", true)}
       </Card>
-      <Card title={nextTitle}>{chart(next, MUTED_BAR, "Fewer than 11 entries in this period")}</Card>
+      <Card title={nextTitle}>
+        {chart(next, MUTED_BAR, "Fewer than 11 entries in this period", false)}
+      </Card>
     </div>
   );
 }
@@ -96,13 +100,13 @@ export function Hse() {
         (every course outside the IADC WellSharp catalogue).
       </Alert>
 
-      <h2 className="text-lg font-bold text-hse">HSE at a Glance</h2>
+      <SectionTitle>HSE at a Glance</SectionTitle>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ValueBox
           title="HSE Courses"
           value={fmtInt(nDistinct(hse.map((r) => r.courseName)))}
           showcase={<Icon name="book" size={26} />}
-          theme="success"
+          theme="primary"
           compact
         />
         <ValueBox
@@ -116,7 +120,7 @@ export function Hse() {
           title="Avg Pass Rate"
           value={<span className="text-lg">Future Enhancement</span>}
           showcase={<Icon name="check-circle" size={26} />}
-          theme="warning"
+          theme="light"
           compact
         />
         <ValueBox
@@ -128,7 +132,7 @@ export function Hse() {
         />
       </div>
 
-      <h2 className="text-lg font-bold text-hse">Top 10 HSE Clients</h2>
+      <SectionTitle>Top 10 HSE Clients</SectionTitle>
       <RankedPair
         title="Top 10 Clients by Participants"
         nextTitle="Next 10 Clients (11–20)"
@@ -137,7 +141,7 @@ export function Hse() {
         leftMargin={200}
       />
 
-      <h2 className="text-lg font-bold text-hse">Top 10 HSE Courses</h2>
+      <SectionTitle>Top 10 HSE Courses</SectionTitle>
       <RankedPair
         title="Top 10 Courses by Enrollment"
         nextTitle="Next 10 Courses (11–20)"
@@ -146,7 +150,7 @@ export function Hse() {
         leftMargin={300}
       />
 
-      <h2 className="text-lg font-bold text-hse">Top 10 HSE Instructors</h2>
+      <SectionTitle>Top 10 HSE Instructors</SectionTitle>
       <RankedPair
         title="Top 10 Instructors by Participants"
         nextTitle="Next 10 Instructors (11–20)"
@@ -155,9 +159,9 @@ export function Hse() {
         leftMargin={200}
       />
 
-      <h2 className="text-lg font-bold text-hse">HSE Trends</h2>
+      <SectionTitle>HSE Trends</SectionTitle>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="HSE Participants Over Time" tone="hse">
+        <Card title="HSE Participants Over Time" tone="marked">
           <Plot
             height={420}
             emptyMessage={trend.length ? null : "No HSE data for the current filters"}

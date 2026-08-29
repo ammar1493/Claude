@@ -1,15 +1,11 @@
 import type { ReactNode } from "react";
 
-type Tone = "plain" | "navy" | "gold" | "dark" | "hse" | "danger";
-
-const TONES: Record<Tone, string> = {
-  plain: "bg-white text-navy border-b border-slate-200",
-  navy: "bg-navy text-white",
-  gold: "bg-gold text-navy",
-  dark: "bg-slate-800 text-white",
-  hse: "bg-hse text-white",
-  danger: "bg-red-600 text-white",
-};
+/**
+ * Card tones. The guidelines keep gold, teal and green out of large flat
+ * fills, so a card is either white or navy; emphasis comes from a gold marker
+ * rule rather than a coloured header bar.
+ */
+type Tone = "plain" | "navy" | "marked";
 
 export function Card({
   title,
@@ -26,13 +22,16 @@ export function Card({
   className?: string;
   bodyClassName?: string;
 }) {
+  const navy = tone === "navy";
   return (
     <section
-      className={`print-block flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70 ${className ?? ""}`}
+      className={`print-block flex flex-col overflow-hidden rounded-lg bg-white ring-1 ring-hairline ${className ?? ""}`}
     >
       {title !== undefined && (
         <header
-          className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm font-bold ${TONES[tone]}`}
+          className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm font-bold ${
+            navy ? "bg-navy text-white" : "border-b border-hairline text-navy"
+          } ${tone === "marked" ? "border-l-4 border-l-gold" : ""}`}
         >
           <span>{title}</span>
           {action}
@@ -52,33 +51,32 @@ export function Alert({
   icon?: ReactNode;
   children: ReactNode;
 }) {
-  const tones = {
-    info: "bg-sky-50 text-sky-900 ring-sky-200",
-    success: "bg-emerald-50 text-emerald-900 ring-emerald-200",
-    secondary: "bg-slate-100 text-slate-700 ring-slate-200",
-    warning: "bg-amber-50 text-amber-900 ring-amber-200",
+  // Notes sit on white with a coloured marker rule, keeping tinted washes off
+  // the fog background.
+  const rules = {
+    info: "border-l-navy",
+    success: "border-l-teal",
+    secondary: "border-l-slate-ink",
+    warning: "border-l-gold",
   } as const;
   return (
-    <div className={`flex items-start gap-2 rounded-lg px-4 py-3 text-sm ring-1 ${tones[tone]}`}>
-      {icon && <span className="mt-0.5 shrink-0">{icon}</span>}
+    <div
+      className={`flex items-start gap-2 rounded-lg border-l-4 bg-white px-4 py-3 text-sm text-slate-ink ring-1 ring-hairline ${rules[tone]}`}
+    >
+      {icon && <span className="mt-0.5 shrink-0 text-navy">{icon}</span>}
       <div>{children}</div>
     </div>
   );
 }
 
-export function SectionTitle({
-  children,
-  tone = "navy",
-  className,
-}: {
-  children: ReactNode;
-  tone?: "navy" | "hse";
-  className?: string;
-}) {
+/**
+ * Section heading. The eyebrow rule is the gold "section marker" the
+ * guidelines call for.
+ */
+export function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <h2
-      className={`text-lg font-bold ${tone === "hse" ? "text-hse" : "text-navy"} ${className ?? ""}`}
-    >
+    <h2 className={`flex items-center gap-2.5 text-lg font-bold text-navy ${className ?? ""}`}>
+      <span aria-hidden className="h-4 w-1 rounded-full bg-gold" />
       {children}
     </h2>
   );

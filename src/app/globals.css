@@ -1,16 +1,24 @@
 @import "tailwindcss";
 
+/*
+ * Tokens from "Neft — Brand Guidelines", section 03.
+ * Navy carries primary surfaces and headline text; gold is reserved for single
+ * accents (CTAs, section markers, key figures); teal and green appear only in
+ * data visualization — never as large flat fills.
+ */
 @theme {
-  --color-navy: #002147;
-  --color-navy-600: #003d7a;
-  --color-navy-050: #eef2f7;
-  --color-gold: #ffc000;
-  --color-gold-050: #fff8e5;
-  --color-hse: #2e7d32;
-  --color-qiddiya: #6a1b9a;
-  --color-takamol: #00796b;
-  --color-shell: #f8f9fa;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-navy: #001a45;
+  --color-navy-700: #0a2757;
+  --color-navy-600: #14346a;
+  --color-navy-050: #eaeef4;
+  --color-gold: #f5a623;
+  --color-gold-050: #fef4e3;
+  --color-teal: #0e6472;
+  --color-green: #8dc63f;
+  --color-fog: #f6f7f9;
+  --color-slate-ink: #5b6472;
+  --color-hairline: #e3e7ed;
+  --font-sans: "Tajawal", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root {
@@ -19,26 +27,38 @@
 
 html,
 body {
-  background: var(--color-shell);
+  background: var(--color-fog);
   color: var(--color-navy);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbars inside cards, kept subtle so charts stay the focus. */
+/* Body & UI sit at 400-500; headings take 700-900. */
+body {
+  font-weight: 400;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+}
+
+/* Arabic blocks: 1-2px larger than their Latin counterpart, always right-aligned. */
+[lang="ar"], [dir="rtl"] {
+  font-size: 1.08em;
+  text-align: right;
+}
+
 .neft-scroll::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
 .neft-scroll::-webkit-scrollbar-thumb {
-  background: #c7d0da;
+  background: #c8cfd9;
   border-radius: 999px;
 }
 .neft-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Native date inputs pick up the navy sidebar otherwise. */
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }

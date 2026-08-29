@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { useDashboard } from "@/state/DashboardContext";
 import { Icon, type IconName } from "./Icons";
 import { Sidebar } from "./Sidebar";
+import { WorkbookDropzone } from "./WorkbookDropzone";
 import { ExecutiveSummary } from "./tabs/ExecutiveSummary";
 import { Hse } from "./tabs/Hse";
 import { Qiddiya } from "./tabs/Qiddiya";
@@ -25,34 +26,44 @@ const TABS: { id: string; label: string; icon: IconName }[] = [
   { id: "data", label: "Data Table", icon: "table" },
 ];
 
+/** Tabs that read the training workbook and cannot render without it. */
+const NEEDS_DATASET = new Set(["exec", "yoy", "hse", "wellsharp", "data"]);
+
 export function Dashboard() {
   const [active, setActive] = useState("exec");
   const [projectScope, setProjectScope] = useState<"all" | "period">("all");
   const { dataset, toasts, dismissToast } = useDashboard();
 
   const print = useCallback(() => window.print(), []);
+  const noData = dataset.status !== "ready";
 
   return (
-    <div className="min-h-screen">
-      {/* Navbar */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2">
-          <img src={BRAND.logo} alt="NEFT" className="h-9 w-auto" />
-          <span className="text-lg font-bold text-navy sm:text-xl">{BRAND.appTitle}</span>
-          <nav className="no-print ml-auto flex flex-wrap gap-1">
+    <div className="min-h-screen [--nav-h:64px]">
+      {/*
+        Top bar stays white: the guidelines allow the full-colour mark on white
+        and light neutrals only, and reserve the knockout version for navy.
+      */}
+      <header className="sticky top-0 z-30 border-b border-hairline bg-white">
+        <div className="flex h-(--nav-h) flex-wrap items-center gap-3 px-4">
+          <img src={BRAND.logo} alt="NEFT Energies" className="h-9 w-auto shrink-0" />
+          <span className="text-base font-bold tracking-tight text-navy sm:text-lg">
+            NEFT Training Analytics
+          </span>
+          <nav className="no-print ml-auto flex flex-wrap gap-0.5">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setActive(t.id)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                aria-current={active === t.id ? "page" : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition ${
                   active === t.id
                     ? "bg-navy text-white"
-                    : "text-navy/70 hover:bg-navy/5 hover:text-navy"
+                    : "text-slate-ink hover:bg-navy-050 hover:text-navy"
                 }`}
               >
                 <Icon name={t.icon} size={15} />
-                <span className="hidden sm:inline">{t.label}</span>
+                <span className="hidden lg:inline">{t.label}</span>
               </button>
             ))}
           </nav>
@@ -62,50 +73,54 @@ export function Dashboard() {
       <div className="flex flex-col lg:flex-row">
         <Sidebar onPrint={print} />
 
-        <main className="min-w-0 flex-1 px-4 py-6 lg:h-[calc(100vh-64px)] lg:overflow-y-auto">
-          {dataset.status === "loading" && <Banner tone="info">Loading the training workbook…</Banner>}
-          {dataset.status === "empty" && (
-            <Banner tone="warning">
-              No training data yet. {dataset.error} Use <strong>Upload workbook</strong> in the sidebar to
-              load an .xlsx with the columns: Actual Date, Course Name, Client, Instructor Name,
-              Participant&rsquo;s Name, Actual Sessions.
-            </Banner>
+        <main className="min-w-0 flex-1 px-4 py-6 lg:h-[calc(100vh-var(--nav-h))] lg:overflow-y-auto">
+          {dataset.status === "loading" && (
+            <p className="mb-4 rounded-lg border-l-4 border-l-navy bg-white px-4 py-3 text-sm text-slate-ink ring-1 ring-hairline">
+              Loading the training workbook…
+            </p>
           )}
-          {dataset.status === "error" && <Banner tone="error">{dataset.error}</Banner>}
 
-          {active === "exec" && (
-            <ExecutiveSummary projectScope={projectScope} onProjectScopeChange={setProjectScope} />
+          {noData && dataset.status !== "loading" && NEEDS_DATASET.has(active) ? (
+            <WorkbookDropzone note={dataset.error} />
+          ) : (
+            <>
+              {active === "exec" && (
+                <ExecutiveSummary projectScope={projectScope} onProjectScopeChange={setProjectScope} />
+              )}
+              {active === "yoy" && <YearOverYear />}
+              {active === "hse" && <Hse />}
+              {active === "wellsharp" && <WellSharp />}
+              {active === "qiddiya" && <Qiddiya />}
+              {active === "takamol" && <Takamol />}
+              {active === "quality" && <QualityMetrics />}
+              {active === "data" && <RawDataTable />}
+            </>
           )}
-          {active === "yoy" && <YearOverYear />}
-          {active === "hse" && <Hse />}
-          {active === "wellsharp" && <WellSharp />}
-          {active === "qiddiya" && <Qiddiya />}
-          {active === "takamol" && <Takamol />}
-          {active === "quality" && <QualityMetrics />}
-          {active === "data" && <RawDataTable />}
 
-          <footer className="mt-10 flex flex-col items-center gap-3 border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
-            <img
-              src={BRAND.sloganSequence}
-              alt="Be trained. Be certified. Be successful."
-              className="h-14 w-auto rounded-lg bg-white px-3 py-1 ring-1 ring-slate-200"
-            />
-            <p>NEFT Training Analytics · {new Date().getFullYear()}</p>
+          <footer className="mt-10 flex flex-col items-center gap-3 border-t border-hairline pt-6 text-center text-xs text-slate-ink">
+            <img src={BRAND.logo} alt="" aria-hidden className="h-7 w-auto opacity-70" />
+            <p>
+              {BRAND.name} · Training Analytics · {new Date().getFullYear()}
+            </p>
           </footer>
         </main>
       </div>
 
-      {/* Notifications (showNotification equivalent) */}
-      <div className="no-print pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2">
+      {/* showNotification() equivalent */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="no-print pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2 rounded-lg px-4 py-3 text-sm shadow-lg ring-1 ${
+            className={`pointer-events-auto flex items-start gap-2 rounded-lg border-l-4 bg-white px-4 py-3 text-sm text-navy ring-1 ring-hairline ${
               t.tone === "error"
-                ? "bg-red-50 text-red-900 ring-red-200"
+                ? "border-l-[#B3261E]"
                 : t.tone === "warning"
-                  ? "bg-amber-50 text-amber-900 ring-amber-200"
-                  : "bg-white text-navy ring-slate-200"
+                  ? "border-l-gold"
+                  : "border-l-teal"
             }`}
           >
             <span className="flex-1">{t.message}</span>
@@ -117,13 +132,4 @@ export function Dashboard() {
       </div>
     </div>
   );
-}
-
-function Banner({ tone, children }: { tone: "info" | "warning" | "error"; children: React.ReactNode }) {
-  const tones = {
-    info: "bg-sky-50 text-sky-900 ring-sky-200",
-    warning: "bg-amber-50 text-amber-900 ring-amber-200",
-    error: "bg-red-50 text-red-900 ring-red-200",
-  } as const;
-  return <div className={`mb-4 rounded-lg px-4 py-3 text-sm ring-1 ${tones[tone]}`}>{children}</div>;
 }

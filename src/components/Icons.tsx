@@ -3,6 +3,10 @@ import type { SVGProps } from "react";
 /**
  * A small stroke-icon set standing in for the bsicons / font-awesome glyphs
  * used by app.R, so the dashboard ships no icon-font dependency.
+ *
+ * Brand guidelines section 05: simple, single-weight line icons at 2px stroke,
+ * navy or white only — no filled sets, no gradients. Every icon here draws in
+ * currentColor, so the surface decides which of the two it is.
  */
 export type IconName =
   | "gauge" | "chart-line" | "shield" | "hard-hat" | "building" | "handshake" | "star" | "table"
@@ -61,7 +65,7 @@ export function Icon({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

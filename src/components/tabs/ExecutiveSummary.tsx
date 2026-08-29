@@ -9,7 +9,7 @@ import { ascending, groupBy, nDistinct, topN } from "@/lib/agg";
 import { NEFT_GOLD, NEFT_NAVY } from "@/lib/brand";
 import { floorMonth, fmtMonthYear, periodFloor } from "@/lib/dates";
 import { fmtInt, fmtNum, pct, round1 } from "@/lib/format";
-import { hbar, headroom, line, vbar } from "@/lib/plots";
+import { hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import { chartDf, periodStats, sessionsCount, strategicDf } from "@/lib/selectors";
 import { isWellSharpCourse } from "@/lib/wellsharp";
 import { useDashboard } from "@/state/DashboardContext";
@@ -106,12 +106,15 @@ export function ExecutiveSummary({
   return (
     <div className="space-y-6">
       {/* Header card */}
-      <div
-        className="print-block rounded-xl px-6 py-6 text-center shadow-sm"
-        style={{ background: `linear-gradient(135deg, ${NEFT_NAVY} 0%, #003d7a 100%)` }}
-      >
-        <h1 className="text-2xl font-bold text-gold sm:text-3xl">{ps.labelMain}</h1>
-        <p className="mt-1 text-base font-semibold text-white">{ps.labelSub}</p>
+      <div className="print-block rounded-lg bg-navy px-6 py-7 text-center">
+        <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-[2rem]">
+          {ps.labelMain}
+        </h1>
+        <p className="mt-2 flex items-center justify-center gap-3 text-sm font-medium text-white/70">
+          <span aria-hidden className="h-px w-8 bg-gold" />
+          {ps.labelSub}
+          <span aria-hidden className="h-px w-8 bg-gold" />
+        </p>
       </div>
 
       {/* Core KPIs */}
@@ -127,7 +130,7 @@ export function ExecutiveSummary({
           title="Unique Sessions"
           value={fmtInt(curSessions)}
           showcase={<Icon name="calendar" size={34} />}
-          theme="secondary"
+          theme="accent"
           footer={<Delta diff={curSessions - prevSessions} />}
         />
         <ValueBox
@@ -140,7 +143,7 @@ export function ExecutiveSummary({
       </div>
 
       {/* WellSharp at a Glance */}
-      <Card title="WellSharp at a Glance" tone="dark">
+      <Card title="WellSharp at a Glance" tone="navy">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <ValueBox
             title="WellSharp Courses"
@@ -153,7 +156,7 @@ export function ExecutiveSummary({
             title="WellSharp Participants"
             value={fmtInt(wsCur.length)}
             showcase={<Icon name="people" size={28} />}
-            theme="secondary"
+            theme="accent"
             compact
             footer={
               wsCur.length && wsPrev.length ? (
@@ -165,7 +168,7 @@ export function ExecutiveSummary({
             title="vs Prior Period"
             value={wsVsPrior === null ? "N/A" : <DeltaPct value={wsVsPrior} />}
             showcase={<Icon name="arrow-up" size={28} />}
-            theme="warning"
+            theme="accent"
             compact
           />
           <ValueBox
@@ -217,7 +220,7 @@ export function ExecutiveSummary({
             title="Takamol Participants"
             value={fmtInt(projects.tkP)}
             showcase={<Icon name="diagram" size={28} />}
-            theme="secondary"
+            theme="accent"
             compact
             footer={projects.tkS > 0 ? `${fmtInt(projects.tkS)} sessions` : "Manually entered"}
           />
@@ -291,7 +294,7 @@ export function ExecutiveSummary({
               hbar({
                 labels: topClients.map((c) => c.client),
                 values: topClients.map((c) => c.participants),
-                color: NEFT_GOLD,
+                color: rankedColors(topClients.length),
                 hovertemplate: "<b>%{y}</b><br>Participants: %{x}<extra></extra>",
               }),
             ]}
@@ -309,7 +312,7 @@ export function ExecutiveSummary({
       </div>
 
       {/* Monthly participants for the selected year */}
-      <Card title="Monthly Participants (Selected Year)" tone="navy">
+      <Card title="Monthly Participants (Selected Year)" tone="marked">
         <Plot
           height={380}
           emptyMessage={monthly.length ? null : `No records for ${filters.year}`}
@@ -331,13 +334,13 @@ export function ExecutiveSummary({
       </Card>
 
       {/* Instructor capacity */}
-      <Card title="Instructor Capacity Overview" tone="navy">
+      <Card title="Instructor Capacity Overview" tone="marked">
         <p className="mb-3 text-xs text-slate-500">
           Active instructor workload distribution and performance metrics
         </p>
         <div className="grid gap-4 xl:grid-cols-12">
           <div className="xl:col-span-7">
-            <h3 className="mb-3 text-sm font-bold">Top 10 Instructors — Sessions &amp; Participants</h3>
+            <h3 className="mb-3 text-sm font-bold text-navy">Top 10 Instructors — Sessions &amp; Participants</h3>
             <Plot
               height={400}
               emptyMessage={workload.length ? null : "No data for the current period"}
@@ -371,24 +374,23 @@ export function ExecutiveSummary({
           </div>
 
           <div className="xl:col-span-5">
-            <h3 className="mb-3 text-sm font-bold">Capacity Metrics</h3>
+            <h3 className="mb-3 text-sm font-bold text-navy">Capacity Metrics</h3>
             {!capacity ? (
               <p className="text-sm text-slate-500">No data for the current period.</p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <StatTile value={fmtInt(capacity.instructors)} label="Active Instructors" tone="navy" />
+                  <StatTile value={fmtInt(capacity.instructors)} label="Active Instructors" />
                   <StatTile
                     value={fmtNum(capacity.avgSessionsPerInstructor)}
                     label="Avg Sessions/Instructor"
-                    tone="gold"
+                    accent
                   />
                   <StatTile
                     value={fmtNum(capacity.avgParticipantsPerInstructor)}
                     label="Avg Participants/Instructor"
-                    tone="green"
                   />
-                  <StatTile value={fmtNum(capacity.avgClassSize)} label="Avg Class Size" tone="cyan" />
+                  <StatTile value={fmtNum(capacity.avgClassSize)} label="Avg Class Size" />
                 </div>
                 {capacity.top && (
                   <div className="mt-3 rounded-lg bg-navy p-3 text-white">

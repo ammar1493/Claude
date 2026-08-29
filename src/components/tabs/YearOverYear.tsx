@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Alert, Card } from "@/components/Card";
+import { Alert, Card, SectionTitle } from "@/components/Card";
 import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
 import { groupBy, nDistinct } from "@/lib/agg";
@@ -71,10 +71,10 @@ export function YearOverYear() {
         <strong>Multi-Year Analysis:</strong> Compare performance across 2023, 2024, and 2025.
       </Alert>
 
-      <h2 className="text-lg font-bold text-navy">Annual Performance Comparison</h2>
+      <SectionTitle>Annual Performance Comparison</SectionTitle>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="Total Participants by Year" tone="navy">
+        <Card title="Total Participants by Year" tone="marked">
           <Plot
             height={470}
             emptyMessage={yearly.length ? null : "No data loaded"}
@@ -100,7 +100,7 @@ export function YearOverYear() {
           />
         </Card>
 
-        <Card title="Total Sessions by Year" tone="gold">
+        <Card title="Total Sessions by Year" tone="marked">
           <p className="mb-2 text-xs italic text-slate-500">Note: Session data not available for 2023</p>
           <Plot
             height={440}
@@ -129,7 +129,7 @@ export function YearOverYear() {
       </div>
 
       <div>
-        <h2 className="mt-4 text-lg font-bold text-navy">Monthly Analysis</h2>
+        <SectionTitle className="mt-4">Monthly Analysis</SectionTitle>
         <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
           <Icon name="filter" size={15} />
           Use the &ldquo;Year for Analysis&rdquo; filter in the sidebar to select which year to view.
@@ -137,7 +137,7 @@ export function YearOverYear() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title={`Participants by Month — ${filters.year}`} tone="navy">
+        <Card title={`Participants by Month — ${filters.year}`} tone="marked">
           <Plot
             height={470}
             emptyMessage={monthly.length ? null : `No records for ${filters.year}`}
@@ -162,7 +162,7 @@ export function YearOverYear() {
           />
         </Card>
 
-        <Card title={`Sessions by Month — ${filters.year}`} tone="gold">
+        <Card title={`Sessions by Month — ${filters.year}`} tone="marked">
           {filters.year === "2023" && (
             <p className="mb-2 text-xs italic text-slate-500">Session data not available for 2023</p>
           )}

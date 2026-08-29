@@ -4,8 +4,7 @@ A web port of the NEFT Shiny dashboard (`reference/app.R`), built with Next.js a
 deployable to Vercel. Every tab, filter, KPI and chart of the R app is reproduced,
 using the same aggregation rules so the numbers match.
 
-**Brand:** NEFT navy `#002147` and gold `#FFC000`, Inter, and the NEFT logo/slogan
-GIFs in `public/brand/`.
+**Brand:** built to `reference/Neft-Brand-Guidelines.pdf` — see [Brand system](#brand-system).
 
 ## Tabs
 
@@ -19,6 +18,37 @@ GIFs in `public/brand/`.
 | Takamol | Fully manual monthly figures, cumulative and yearly views |
 | Quality Metrics | Instructor evaluation scores read from the published Google workbook |
 | Data Table | The filtered raw rows |
+
+## Brand system
+
+Tokens live in `src/lib/brand.ts` and `src/app/globals.css`, taken from sections
+03–05 of the guidelines.
+
+| Role | Value |
+| --- | --- |
+| Navy — primary surfaces and headline text | `#001A45` |
+| Gold — primary accent | `#F5A623` |
+| Teal — secondary | `#0E6472` |
+| Green — tertiary | `#8DC63F` |
+| Fog — background | `#F6F7F9` |
+| Slate — supporting text | `#5B6472` |
+| Typeface | Tajawal — headings 700–900, body & UI 400–500 |
+
+Three rules shaped the layout, so they are worth stating:
+
+- **Gold is never a large flat fill.** It carries key figures, section markers,
+  CTAs and the leading bar of a ranking — never a card header or a whole series.
+- **Teal and green appear only in data visualization.** Sections are identified
+  by their chart series colour and a gold marker rule, not by a coloured header
+  bar, so the HSE tab reads teal in its charts rather than green in its headers.
+- **Icons are single-weight 2px line icons in navy or white**, no fills and no
+  gradients (`src/components/Icons.tsx`).
+
+The mark supplied in this repo is the icon mark, not the full lockup, so the
+120px full-lockup minimum does not apply to it — section 02 in fact directs you
+to the icon mark alone at small sizes. It is used full-colour on white only,
+never on the navy sidebar, and `public/brand/neft-logo.png` is the animation's
+final frame so the header does not flicker mid-build.
 
 ## How the R logic was ported
 
@@ -34,15 +64,37 @@ function it came from:
 
 ## Data sources
 
-**Training workbook** (`/api/dataset`), tried in order:
+**Training workbook.** The intended workflow is to upload the export on each
+visit: the dashboard opens on a drop zone, and the workbook is parsed in the
+browser and kept in IndexedDB, so a reload does not need a re-upload. Replace it
+from the sidebar at any time. Nothing is sent to a server.
+
+An upload always wins. With no upload stored, `/api/dataset` is tried in order:
 
 1. `NEFT_DATA_XLSX_URL` — a published `.xlsx` URL set as an environment variable
 2. `public/data/dataset.xlsx` — a workbook committed to the repo
 3. the published Google workbook the R app already used
-4. an upload from the sidebar, stored in the browser and preferred over all of the above
 
-**Qiddiya workbooks** (`/api/qiddiya`): every `.xlsx` in `public/qiddiya/` whose name
-contains `QCTA` or `Qiddiya`, plus any workbook added from the Qiddiya tab.
+The first sheet carrying all six required columns is used; extra columns
+(`Location`, `Session No`, `Duplicates`, …) are carried through to the Data Table
+untouched. **2023 has no workbook records, so those monthly figures stay hard-coded**
+in `MANUAL_2023` (`src/lib/config.ts`) and feed the Year-over-Year tab — the
+uploaded workbook only needs 2024 onwards.
+
+**Qiddiya workbooks.** Add the QCTA file from the Qiddiya Academy tab, or commit
+it to `public/qiddiya/` (any `.xlsx` whose name contains `QCTA` or `Qiddiya` is
+picked up by `/api/qiddiya`). **Every sheet in the workbook is parsed**, so a
+single file with one tab per month works — the Period selector then lists each
+month, and totals across tabs are summed with duplicate (date, class, course)
+rows counted once.
+
+Verified against `QCTA — Trainers Utilization — July 2026`: the parser returns
+504 participants and 52 teaching days, matching the workbook's own totals. It
+reports 46 sessions where the workbook's summary cell says 45 — the workbook's
+per-block course counts also sum to 46, so its Sessions formula appears to miss
+the unlabelled block at the bottom (Waqas Anjum · Confined Space Rescue · 27 Jul),
+whose 14 students its Students total does include. The parser counts every
+course cell, which is what app.R did.
 
 **Quality Metrics** (`/api/sheet?name=…`): the published Google workbook, fetched
 server-side so the request stays same-origin.
@@ -71,6 +123,7 @@ rather than in the repo. `/api/dataset` and `/api/sheet` cache their fetches for
 | R app | Here |
 | --- | --- |
 | Manual entries written to `manual_entries/*.csv` next to the app | Stored in the browser, with **Import CSV** / **Export CSV** in the same column format — Vercel gives a deployed app no writable disk |
+| `FILE_PATH <- "2024 Data.xlsx"` read from disk at startup | Uploaded in the browser each visit (or resolved from a URL / committed file), parsed client-side |
 | Qiddiya workbooks discovered by scanning working directories at runtime | Read from `public/qiddiya/`, plus in-browser uploads — a serverless deployment has no such directory to scan |
 | `downloadHandler` renders `report.Rmd` to PDF via LaTeX | **Generate PDF Report** opens the browser's print dialog against a print stylesheet that hides the chrome and keeps cards from splitting across pages |
 | `shiny::showNotification()` | Toasts in the bottom-right corner |

@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
 import { ValueBox } from "@/components/ValueBox";
 import { ascending, groupBy, nDistinct, sumBy, topN } from "@/lib/agg";
-import { CHART_MARGIN_H, CHART_MARGIN_V, NEFT_GOLD, NEFT_NAVY } from "@/lib/brand";
+import { CHART_MARGIN_H, CHART_MARGIN_V, NEFT_GOLD, NEFT_NAVY, NEFT_TEAL } from "@/lib/brand";
 import {
   addDays,
   ceilingMonth,
@@ -20,7 +20,7 @@ import {
 } from "@/lib/dates";
 import { fmtInt, fmtNum, round1 } from "@/lib/format";
 import { filterWindow, withDates } from "@/lib/manual";
-import { hbar, headroom, line, vbar } from "@/lib/plots";
+import { hbar, headroom, line, rankedColors, rankedColorsOf, vbar } from "@/lib/plots";
 import { useDashboard } from "@/state/DashboardContext";
 import { ManualEntryPanel } from "./ManualEntryPanel";
 
@@ -265,7 +265,7 @@ export function Qiddiya() {
           title="Sessions Delivered"
           value={fmtInt(totals.sessions)}
           showcase={<Icon name="calendar-check" size={28} />}
-          theme="secondary"
+          theme="accent"
           compact
           footer={splitNote(totals.wbS, totals.mnS)}
         />
@@ -273,7 +273,7 @@ export function Qiddiya() {
           title="Teaching Days"
           value={fmtInt(totals.days)}
           showcase={<Icon name="clock-history" size={28} />}
-          theme="dark"
+          theme="deep"
           compact
           footer={
             <span className="text-xs">
@@ -293,7 +293,7 @@ export function Qiddiya() {
         />
       </div>
 
-      <Card title="Add Qiddiya Numbers Manually" tone="gold">
+      <Card title="Add Qiddiya Numbers Manually" tone="marked">
         <ManualEntryPanel
           prefix="QD"
           rows={qdManual}
@@ -330,7 +330,7 @@ export function Qiddiya() {
           />
         </Card>
 
-        <Card title="Sessions &amp; Teaching Days by Month" tone="gold">
+        <Card title="Sessions &amp; Teaching Days by Month" tone="marked">
           <Plot
             height={420}
             emptyMessage={monthly.length ? null : "No Qiddiya data for this selection"}
@@ -372,7 +372,7 @@ export function Qiddiya() {
               hbar({
                 labels: instructorRanking.map((i) => i.instructor),
                 values: instructorRanking.map((i) => i.teachingDays),
-                color: NEFT_NAVY,
+                color: rankedColors(instructorRanking.length),
                 text: instructorRanking.map((i) => `${i.teachingDays} days | ${i.students} participants`),
                 hovertemplate: "<b>%{y}</b><br>Teaching days: %{x}<extra></extra>",
               }),
@@ -397,9 +397,7 @@ export function Qiddiya() {
               hbar({
                 labels: courseRanking.map((c) => c.course),
                 values: courseRanking.map((c) => c.participants),
-                color: NEFT_GOLD,
-                outlineColor: NEFT_NAVY,
-                outlineWidth: 1,
+                color: rankedColorsOf(NEFT_TEAL, courseRanking.length),
                 text: courseRanking.map((c) => `${c.participants} (${c.sessions} sessions)`),
                 hovertemplate: "<b>%{y}</b><br>Participants: %{x}<extra></extra>",
               }),
@@ -418,7 +416,7 @@ export function Qiddiya() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="Utilization by Class / Track" tone="dark">
+        <Card title="Utilization by Class / Track" tone="navy">
           <Plot
             height={420}
             emptyMessage={classUtilisation.length ? null : "No class data in the workbook"}
@@ -477,7 +475,7 @@ export function Qiddiya() {
         </Card>
       </div>
 
-      <Card title="Session Detail (from workbook)" tone="dark">
+      <Card title="Session Detail (from workbook)" tone="navy">
         <DataTable
           rows={[...sessions].sort(
             (a, b) => a.date.getTime() - b.date.getTime() || a.class.localeCompare(b.class),

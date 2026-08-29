@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Alert, Card } from "@/components/Card";
+import { Alert, Card, SectionTitle } from "@/components/Card";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
@@ -18,7 +18,7 @@ import {
   fmtMonthYear,
 } from "@/lib/dates";
 import { fmtInt, fmtNum, round1 } from "@/lib/format";
-import { CATEGORY_COLORS, hbar, headroom, line, vbar } from "@/lib/plots";
+import { CATEGORY_COLORS, hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import type { WellSharpRow } from "@/lib/types";
 import {
   instructorCourseBreakdown,
@@ -235,12 +235,12 @@ export function WellSharp() {
         courses.
       </Alert>
 
-      <Card title="WellSharp Course Hours Reference" tone="dark" className="min-h-[380px]">
+      <Card title="WellSharp Course Hours Reference" tone="navy" className="min-h-[380px]">
         <DataTable rows={WELLSHARP_HOURS} columns={refColumns} pageLength={7} dense />
       </Card>
 
       <div>
-        <h2 className="text-lg font-bold text-navy">WellSharp Period Analysis</h2>
+        <SectionTitle>WellSharp Period Analysis</SectionTitle>
         <p className="mt-1 flex items-start gap-2 text-sm text-slate-500">
           <Icon name="info" size={15} className="mt-0.5 shrink-0" />
           Use the &ldquo;Charts View&rdquo; selector in the sidebar. Weekly uses the date range (weeks start
@@ -249,7 +249,7 @@ export function WellSharp() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title={`WellSharp ${modeLabel} Teaching Hours`} tone="navy">
+        <Card title={`WellSharp ${modeLabel} Teaching Hours`} tone="marked">
           <Plot
             height={420}
             emptyMessage={noData ? emptyMsg : null}
@@ -293,7 +293,7 @@ export function WellSharp() {
           />
         </Card>
 
-        <Card title={`WellSharp ${modeLabel} Sessions & Participants`} tone="gold">
+        <Card title={`WellSharp ${modeLabel} Sessions & Participants`} tone="marked">
           <Plot
             height={420}
             emptyMessage={noData ? emptyMsg : null}
@@ -352,10 +352,10 @@ export function WellSharp() {
         </Card>
       </div>
 
-      <h2 className="text-lg font-bold text-navy">{periodLabel}</h2>
+      <SectionTitle>{periodLabel}</SectionTitle>
 
       <div className="grid gap-4 xl:grid-cols-12">
-        <Card title="Top 6 Instructors by Teaching Hours" tone="navy" className="xl:col-span-7">
+        <Card title="Top 6 Instructors by Teaching Hours" tone="marked" className="xl:col-span-7">
           <p className="mb-2 text-xs text-slate-500">Teaching hours = sessions × course hours</p>
           <Plot
             height={440}
@@ -364,9 +364,7 @@ export function WellSharp() {
               hbar({
                 labels: topInstructors.map((i) => i.instructor),
                 values: topInstructors.map((i) => i.teachingHours),
-                color: NEFT_NAVY,
-                outlineColor: NEFT_GOLD,
-                outlineWidth: 2,
+                color: rankedColors(topInstructors.length),
                 textSize: 12,
                 text: topInstructors.map(
                   (i) => `${fmtInt(i.teachingHours)} hrs (${i.sessionsCount} sessions)`,
@@ -386,7 +384,7 @@ export function WellSharp() {
           />
         </Card>
 
-        <Card title="WellSharp Summary" tone="gold" className="xl:col-span-5">
+        <Card title="WellSharp Summary" tone="navy" className="xl:col-span-5">
           {!summary ? (
             <div className="flex h-64 flex-col items-center justify-center text-slate-400">
               <Icon name="warning" size={40} />
@@ -399,16 +397,15 @@ export function WellSharp() {
                   value={fmtInt(summary.participants)}
                   label="Total Participants"
                   sub="(incl. retakes)"
-                  tone="navy"
                 />
-                <StatTile value={fmtInt(summary.instructors)} label="Instructors" tone="gold" />
-                <StatTile value={fmtInt(summary.sessions)} label="Total Sessions" tone="green" />
-                <StatTile value={fmtInt(summary.totalHours)} label="Total Teaching Hours" tone="cyan" />
+                <StatTile value={fmtInt(summary.instructors)} label="Instructors" />
+                <StatTile value={fmtInt(summary.sessions)} label="Total Sessions" />
+                <StatTile value={fmtInt(summary.totalHours)} label="Total Teaching Hours" accent />
               </div>
               <div className="mt-3 grid grid-cols-3 gap-3">
-                <StatTile value={fmtInt(summary.courses)} label="Active Courses" tone="navy" />
-                <StatTile value={fmtInt(summary.retakes)} label="Course Retakes" tone="red" />
-                <StatTile value={fmtNum(summary.avgClassSize)} label="Avg Class Size" tone="slate" />
+                <StatTile value={fmtInt(summary.courses)} label="Active Courses" />
+                <StatTile value={fmtInt(summary.retakes)} label="Course Retakes" />
+                <StatTile value={fmtNum(summary.avgClassSize)} label="Avg Class Size" />
               </div>
               {summary.topCourse && (
                 <div className="mt-3 rounded-lg bg-navy p-3 text-white">
@@ -443,7 +440,7 @@ export function WellSharp() {
           />
         </Card>
 
-        <Card title="Course Retakes Analysis" tone="danger">
+        <Card title="Course Retakes Analysis" tone="marked">
           <p className="mb-2 text-xs text-slate-500">Participants who took Retake Exam</p>
           <Plot
             height={250}
@@ -486,8 +483,8 @@ export function WellSharp() {
         </Card>
       </div>
 
-      <h2 className="text-lg font-bold text-navy">Top 5 WellSharp Clients</h2>
-      <Card title="Top 5 Clients by Participants" tone="navy">
+      <SectionTitle>Top 5 WellSharp Clients</SectionTitle>
+      <Card title="Top 5 Clients by Participants" tone="marked">
         <p className="mb-2 text-xs text-slate-500">
           Clients with highest WellSharp participant counts (includes retakes)
         </p>
@@ -498,8 +495,7 @@ export function WellSharp() {
             hbar({
               labels: top5Clients.map((c) => c.client),
               values: top5Clients.map((c) => c.participants),
-              color: NEFT_NAVY,
-              outlineColor: NEFT_GOLD,
+              color: rankedColors(top5Clients.length),
               text: top5Clients.map(
                 (c) => `${fmtInt(c.participants)} participants (${c.sessions} sessions, ${c.retakes} retakes)`,
               ),
@@ -520,7 +516,7 @@ export function WellSharp() {
         />
       </Card>
 
-      <Card title="Instructors vs No. of Participants Taught" tone="navy">
+      <Card title="Instructors vs No. of Participants Taught" tone="marked">
         <p className="mb-2 text-xs text-slate-500">Total participants trained per WellSharp instructor</p>
         <Plot
           height={520}
@@ -529,8 +525,7 @@ export function WellSharp() {
             hbar({
               labels: instructorParticipants.map((i) => i.instructor),
               values: instructorParticipants.map((i) => i.participants),
-              color: NEFT_NAVY,
-              outlineColor: NEFT_GOLD,
+              color: rankedColors(instructorParticipants.length),
               text: instructorParticipants.map(
                 (i) => `${fmtInt(i.participants)} participants (${i.sessions} sessions)`,
               ),
@@ -549,7 +544,7 @@ export function WellSharp() {
         />
       </Card>
 
-      <Card title="Instructor Detail Table" tone="dark">
+      <Card title="Instructor Detail Table" tone="navy">
         <DataTable
           rows={detailRows}
           pageLength={15}

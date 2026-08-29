@@ -23,6 +23,10 @@ function cleanChr(value: unknown): string {
 
 /** qd_to_date(): Excel serials in the calendar band, else a parseable date. */
 function toDate(value: unknown): Date | null {
+  // A workbook read with cellDates:true hands back Date objects for the
+  // calendar row; cleanChr() would turn those into an epoch far outside the
+  // serial band below, so they are resolved before any string handling.
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : cellToDate(value);
   const s = cleanChr(value);
   if (!s) return null;
   const num = Number(s);
