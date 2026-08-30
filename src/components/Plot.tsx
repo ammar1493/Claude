@@ -28,7 +28,17 @@ const BASE_LAYOUT: Record<string, unknown> = {
   paper_bgcolor: "rgba(0,0,0,0)",
   plot_bgcolor: "rgba(0,0,0,0)",
   hoverlabel: { font: { ...PLOT_FONT, size: 12 } },
-  xaxis: { gridcolor: "#e9edf2", zerolinecolor: "#e9edf2", automargin: true },
+  // Transparent outside ticks give the x labels a little standoff from the
+  // axis. Without it the first tick of a date axis, which sits flush against
+  // the left edge, collides with the y-axis zero at the corner.
+  xaxis: {
+    gridcolor: "#e9edf2",
+    zerolinecolor: "#e9edf2",
+    automargin: true,
+    ticks: "outside",
+    ticklen: 6,
+    tickcolor: "rgba(0,0,0,0)",
+  },
   yaxis: { gridcolor: "#e9edf2", zerolinecolor: "#e9edf2", automargin: true },
 };
 

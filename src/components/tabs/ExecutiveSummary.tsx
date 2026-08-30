@@ -6,14 +6,34 @@ import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
 import { Delta, DeltaPct, StatTile, ValueBox } from "@/components/ValueBox";
 import { ascending, groupBy, nDistinct, topN } from "@/lib/agg";
-import { NEFT_GOLD, NEFT_NAVY } from "@/lib/brand";
-import { floorMonth, fmtMonthShort, periodFloor } from "@/lib/dates";
+import { NEFT_GOLD, NEFT_GREEN, NEFT_NAVY, NEFT_TEAL } from "@/lib/brand";
+import { floorMonth, fmtMonthShort, floorYear, ceilingYear, addDays, periodFloor } from "@/lib/dates";
 import { fmtInt, fmtNum, pct, round1 } from "@/lib/format";
 import { hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import { chartDf, periodStats, sessionsCount, strategicDf } from "@/lib/selectors";
 import { isWellSharpCourse } from "@/lib/wellsharp";
 import { useDashboard } from "@/state/DashboardContext";
-import { usePeriodTotals, useProjectTotals } from "./projectTotals";
+import { usePeriodTotals, useProjectSeries, useProjectTotals } from "./projectTotals";
+
+/** One band of the all-sources trend. */
+function stackedArea(
+  name: string,
+  x: Date[],
+  y: number[],
+  color: string,
+): Record<string, unknown> {
+  return {
+    type: "scatter",
+    mode: "lines",
+    stackgroup: "sources",
+    name,
+    x,
+    y,
+    line: { color, width: 1.5 },
+    fillcolor: color,
+    hovertemplate: `<b>%{x}</b><br>${name}: %{y:,}<extra></extra>`,
+  };
+}
 
 /** Shows what a combined KPI is made of, so a filtered figure stays readable. */
 function SourceSplit({
@@ -70,12 +90,54 @@ export function ExecutiveSummary({
   const wsPctOfTotal = ps.cur.length ? pct(wsCur.length, ps.cur.length) : 0;
 
   // --- Charts ---
+  /**
+   * The windows chartDf() and strategicDf() use, so the project series lines up
+   * with the NEFT series on the same charts.
+   */
+  const trendWindow = useMemo(() => {
+    if (filters.granularity === "monthly" || filters.granularity === "yearly") {
+      const start = floorYear(new Date(Number(filters.year), 0, 1));
+      return { start, end: addDays(ceilingYear(start), -1) };
+    }
+    return { start: filters.startDate, end: filters.endDate };
+  }, [filters.granularity, filters.year, filters.startDate, filters.endDate]);
+
+  const yearWindow = useMemo(() => {
+    const start = floorYear(new Date(Number(filters.year), 0, 1));
+    return { start, end: addDays(ceilingYear(start), -1) };
+  }, [filters.year]);
+
+  const trendProjects = useProjectSeries(filters.granularity, trendWindow);
+  const monthProjects = useProjectSeries("monthly", yearWindow);
+
   const trend = useMemo(() => {
     const buckets = groupBy(chart, (r) => periodFloor(r.date, filters.granularity).getTime());
-    return [...buckets.entries()]
-      .map(([t, rs]) => ({ period: new Date(t), participants: rs.length }))
+    const keys = new Set<number>([...buckets.keys(), ...trendProjects.keys()]);
+    return [...keys]
+      .map((t) => {
+        const proj = trendProjects.get(t);
+        const neft = buckets.get(t)?.length ?? 0;
+        const qd = proj?.qd ?? 0;
+        const tk = proj?.tk ?? 0;
+        return { period: new Date(t), neft, qd, tk, total: neft + qd + tk };
+      })
       .sort((a, b) => a.period.getTime() - b.period.getTime());
-  }, [chart, filters.granularity]);
+  }, [chart, filters.granularity, trendProjects]);
+
+  const trendHasProjects = trend.some((t) => t.qd > 0 || t.tk > 0);
+
+  /**
+   * The first point sits flush against the y-axis otherwise, which puts its
+   * tick label on top of the axis zero. A little padding on each side fixes
+   * that and stops the area touching the frame.
+   */
+  const trendRange = useMemo(() => {
+    if (!trend.length) return undefined;
+    const first = trend[0].period.getTime();
+    const last = trend[trend.length - 1].period.getTime();
+    const pad = Math.max((last - first) * 0.04, 86_400_000);
+    return [new Date(first - pad).toISOString(), new Date(last + pad).toISOString()];
+  }, [trend]);
 
   const topClients = useMemo(() => {
     const agg = [...groupBy(chart, (r) => r.client).entries()].map(([client, rs]) => ({
@@ -87,10 +149,19 @@ export function ExecutiveSummary({
 
   const monthly = useMemo(() => {
     const buckets = groupBy(strategic, (r) => floorMonth(r.date).getTime());
-    return [...buckets.entries()]
-      .map(([t, rs]) => ({ month: new Date(t), participants: rs.length }))
+    const keys = new Set<number>([...buckets.keys(), ...monthProjects.keys()]);
+    return [...keys]
+      .map((t) => {
+        const proj = monthProjects.get(t);
+        const neft = buckets.get(t)?.length ?? 0;
+        const qd = proj?.qd ?? 0;
+        const tk = proj?.tk ?? 0;
+        return { month: new Date(t), neft, qd, tk, total: neft + qd + tk };
+      })
       .sort((a, b) => a.month.getTime() - b.month.getTime());
-  }, [strategic]);
+  }, [strategic, monthProjects]);
+
+  const monthlyHasProjects = monthly.some((m) => m.qd > 0 || m.tk > 0);
 
   const workload = useMemo(() => {
     const agg = [...groupBy(ps.cur, (r) => r.instructorName).entries()].map(([instructor, rs]) => ({
@@ -308,32 +379,52 @@ export function ExecutiveSummary({
       {/* Trend + Top clients */}
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title={`${label(filters.granularity)} Activity Trend`}>
+          {trendHasProjects && (
+            <p className="mb-2 text-xs text-slate-ink">
+              All sources. Manually entered project months sit on the first of their month.
+            </p>
+          )}
           <Plot
-            height={420}
+            height={trendHasProjects ? 400 : 420}
             emptyMessage={trend.length ? null : "No data for the current filters"}
-            data={[
-              line({
-                x: trend.map((t) => t.period),
-                y: trend.map((t) => t.participants),
-                color: NEFT_NAVY,
-                fill: true,
-                showText: true,
-                hovertemplate: "<b>%{x}</b><br>Participants: %{y}<extra></extra>",
-              }),
-            ]}
+            data={
+              trendHasProjects
+                ? [
+                    stackedArea("NEFT Data", trend.map((t) => t.period), trend.map((t) => t.neft), NEFT_NAVY),
+                    stackedArea("Qiddiya Academy", trend.map((t) => t.period), trend.map((t) => t.qd), NEFT_TEAL),
+                    stackedArea("Takamol", trend.map((t) => t.period), trend.map((t) => t.tk), NEFT_GREEN),
+                  ]
+                : [
+                    line({
+                      x: trend.map((t) => t.period),
+                      y: trend.map((t) => t.total),
+                      color: NEFT_NAVY,
+                      fill: true,
+                      showText: true,
+                      hovertemplate: "<b>%{x}</b><br>Participants: %{y}<extra></extra>",
+                    }),
+                  ]
+            }
             layout={{
-              xaxis: { title: { text: xTitle } },
+              xaxis: { title: { text: xTitle }, ...(trendRange ? { range: trendRange } : {}) },
               yaxis: {
                 title: { text: "Participants" },
-                range: headroom(trend.map((t) => t.participants), 1.25),
+                tickformat: ",",
+                range: headroom(trend.map((t) => t.total), 1.25),
               },
-              margin: { l: 60, r: 30, t: 40, b: 40 },
-              showlegend: false,
+              legend: { orientation: "h", x: 0, y: 1.12, font: { size: 11 } },
+              // The left margin keeps the y-axis zero clear of the first x tick,
+              // which sits flush against the axis.
+              margin: { l: 85, r: 35, t: trendHasProjects ? 45 : 40, b: 45 },
+              showlegend: trendHasProjects,
             }}
           />
         </Card>
 
         <Card title="Top Clients">
+          <p className="mb-2 text-xs text-slate-ink">
+            NEFT Data — the projects do not record a client.
+          </p>
           <Plot
             height={420}
             emptyMessage={topClients.length ? null : "No data for the current filters"}
@@ -363,31 +454,75 @@ export function ExecutiveSummary({
         <Plot
           height={380}
           emptyMessage={monthly.length ? null : `No records for ${filters.year}`}
-          data={[
-            vbar({
-              labels: monthly.map((m) => fmtMonthShort(m.month)),
-              values: monthly.map((m) => m.participants),
-              color: NEFT_NAVY,
-              hovertemplate: "<b>%{x}</b><br>Participants: %{y}<extra></extra>",
-            }),
-          ]}
+          data={
+            monthlyHasProjects
+              ? [
+                  vbar({
+                    labels: monthly.map((m) => fmtMonthShort(m.month)),
+                    values: monthly.map((m) => m.neft),
+                    color: NEFT_NAVY,
+                    name: "NEFT Data",
+                    text: [],
+                    hovertemplate: "<b>%{x}</b><br>NEFT: %{y:,}<extra></extra>",
+                  }),
+                  vbar({
+                    labels: monthly.map((m) => fmtMonthShort(m.month)),
+                    values: monthly.map((m) => m.qd),
+                    color: NEFT_TEAL,
+                    name: "Qiddiya Academy",
+                    text: [],
+                    hovertemplate: "<b>%{x}</b><br>Qiddiya: %{y:,}<extra></extra>",
+                  }),
+                  vbar({
+                    labels: monthly.map((m) => fmtMonthShort(m.month)),
+                    values: monthly.map((m) => m.tk),
+                    color: NEFT_GREEN,
+                    name: "Takamol",
+                    text: [],
+                    hovertemplate: "<b>%{x}</b><br>Takamol: %{y:,}<extra></extra>",
+                  }),
+                  // Carries the stack total as the only label on the bar.
+                  {
+                    type: "scatter",
+                    mode: "text",
+                    x: monthly.map((m) => fmtMonthShort(m.month)),
+                    y: monthly.map((m) => m.total),
+                    text: monthly.map((m) => fmtInt(m.total)),
+                    textposition: "top center",
+                    textfont: { size: 11, color: NEFT_NAVY },
+                    showlegend: false,
+                    hoverinfo: "skip",
+                  },
+                ]
+              : [
+                  vbar({
+                    labels: monthly.map((m) => fmtMonthShort(m.month)),
+                    values: monthly.map((m) => m.total),
+                    color: NEFT_NAVY,
+                    hovertemplate: "<b>%{x}</b><br>Participants: %{y:,}<extra></extra>",
+                  }),
+                ]
+          }
           layout={{
+            barmode: "stack",
             xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
             yaxis: {
               title: { text: "Participants" },
               tickformat: ",",
-              range: headroom(monthly.map((m) => m.participants), 1.25),
+              range: headroom(monthly.map((m) => m.total), 1.25),
             },
-            margin: { l: 80, r: 40, t: 40, b: 50 },
-            showlegend: false,
+            legend: { orientation: "h", x: 0, y: 1.14, font: { size: 11 } },
+            margin: { l: 80, r: 40, t: monthlyHasProjects ? 50 : 40, b: 50 },
+            showlegend: monthlyHasProjects,
           }}
         />
       </Card>
 
       {/* Instructor capacity */}
       <Card title="Instructor Capacity Overview" tone="marked">
-        <p className="mb-3 text-xs text-slate-500">
-          Active instructor workload distribution and performance metrics
+        <p className="mb-3 text-xs text-slate-ink">
+          Active instructor workload distribution and performance metrics. NEFT Data — Qiddiya
+          instructors are counted in teaching days on the Qiddiya Academy tab.
         </p>
         <div className="grid gap-4 xl:grid-cols-12">
           <div className="xl:col-span-7">

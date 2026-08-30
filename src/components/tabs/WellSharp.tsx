@@ -15,7 +15,7 @@ import {
   floorWeek,
   fmtDayMonth,
   fmtDayMonthYear,
-  fmtMonthYear,
+  fmtMonthShort,
 } from "@/lib/dates";
 import { fmtInt, fmtNum, round1 } from "@/lib/format";
 import { CATEGORY_COLORS, hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
@@ -93,7 +93,9 @@ export function WellSharp() {
 
   const bucketLabel = (d: Date) => {
     if (mode === "weekly") return `${fmtDayMonth(d)} - ${fmtDayMonth(addDays(d, 6))}`;
-    if (mode === "monthly") return fmtMonthYear(d);
+    // The card title already names the year in monthly mode, so "Jan 2026"
+    // would only be a wider label that collides with its neighbour.
+    if (mode === "monthly") return fmtMonthShort(d);
     if (mode === "yearly") return String(d.getFullYear());
     return fmtDayMonthYear(d);
   };
@@ -279,7 +281,7 @@ export function WellSharp() {
             layout={{
               xaxis: {
                 title: { text: mode === "yearly" ? "Year" : "" },
-                tickangle: mode === "weekly" || mode === "monthly" ? -45 : 0,
+                tickangle: mode === "weekly" ? -45 : 0,
                 tickfont: { size: mode === "yearly" ? 12 : 10 },
                 ...(mode === "daily" ? {} : { type: "category" }),
               },
@@ -336,7 +338,7 @@ export function WellSharp() {
               barmode: "group",
               xaxis: {
                 title: { text: mode === "yearly" ? "Year" : "" },
-                tickangle: mode === "weekly" || mode === "monthly" ? -45 : 0,
+                tickangle: mode === "weekly" ? -45 : 0,
                 tickfont: { size: mode === "yearly" ? 12 : 10 },
                 ...(mode === "daily" ? {} : { type: "category" }),
               },

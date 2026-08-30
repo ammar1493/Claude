@@ -53,7 +53,15 @@ function RankedPair({
         }),
       ]}
       layout={{
-        xaxis: { title: { text: unit }, range: headroom(rows.map((r) => r.value)) },
+        xaxis: {
+          title: { text: unit },
+          range: headroom(rows.map((r) => r.value)),
+          // The long category labels leave roughly 220px of value axis in a
+          // two-column layout, so the ticks are both capped and abbreviated
+          // ("2k" rather than "2,000"). Each bar still carries its exact value.
+          nticks: 4,
+          tickformat: "~s",
+        },
         yaxis: { title: { text: "" }, type: "category", tickfont: { size: 10 } },
         margin: { l: leftMargin, r: 70, t: 20, b: 40 },
         showlegend: false,

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { nDistinct, sumBy } from "@/lib/agg";
+import { periodFloor, type Granularity } from "@/lib/dates";
 import { filterWindow, withDates } from "@/lib/manual";
 import type { PeriodStats } from "@/lib/selectors";
 import type { ManualEntry, QiddiyaStore } from "@/lib/types";
@@ -142,4 +143,44 @@ export function usePeriodTotals(ps: PeriodStats) {
       hasProjects: cur.participants + cur.sessions > 0,
     };
   }, [ps, qiddiya, qdManual, tkManual]);
+}
+
+/**
+ * Qiddiya and Takamol participants bucketed onto the same period grid the
+ * NEFT charts use, so the Executive Summary can show all three sources on one
+ * timeline.
+ *
+ * Workbook sessions carry a real date. Manually entered months only carry a
+ * month, so at daily or weekly granularity they land on the first of their
+ * month — the charts that use this say so.
+ */
+export function useProjectSeries(
+  granularity: Granularity,
+  window: { start: Date; end: Date } | null,
+): Map<number, { qd: number; tk: number }> {
+  const { qiddiya, qdManual, tkManual } = useDashboard();
+
+  return useMemo(() => {
+    const out = new Map<number, { qd: number; tk: number }>();
+    const inWindow = (d: Date) => !window || (d >= window.start && d <= window.end);
+    const add = (d: Date, qd: number, tk: number) => {
+      const k = periodFloor(d, granularity).getTime();
+      const hit = out.get(k);
+      if (hit) {
+        hit.qd += qd;
+        hit.tk += tk;
+      } else out.set(k, { qd, tk });
+    };
+
+    for (const s of qiddiya?.sessions ?? []) {
+      if (inWindow(s.date)) add(s.date, s.students, 0);
+    }
+    for (const m of withDates(qdManual)) {
+      if (inWindow(m.periodDate)) add(m.periodDate, m.participants, 0);
+    }
+    for (const m of withDates(tkManual)) {
+      if (inWindow(m.periodDate)) add(m.periodDate, 0, m.participants);
+    }
+    return out;
+  }, [qiddiya, qdManual, tkManual, granularity, window]);
 }
