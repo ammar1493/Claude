@@ -38,6 +38,9 @@ interface DatasetState {
   /** Where the workbook came from — shown in the data source panel. */
   source: string;
   error: string | null;
+  /** Earliest and latest Actual Date in the workbook, for the coverage line. */
+  firstDate: Date | null;
+  lastDate: Date | null;
 }
 
 interface DashboardValue {
@@ -78,6 +81,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     columns: [],
     source: "",
     error: null,
+    firstDate: null,
+    lastDate: null,
   });
 
   const [filters, setFiltersState] = useState<Filters>(() => ({
@@ -114,12 +119,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const applyWorkbook = useCallback((data: ArrayBuffer, source: string) => {
     const parsed = parseTrainingWorkbook(data);
+    let firstDate: Date | null = null;
+    let lastDate: Date | null = null;
+    for (const r of parsed.rows) {
+      if (!firstDate || r.date < firstDate) firstDate = r.date;
+      if (!lastDate || r.date > lastDate) lastDate = r.date;
+    }
     setDataset({
       status: parsed.rows.length ? "ready" : "empty",
       rows: parsed.rows,
       columns: parsed.columns,
       source: `${source} · sheet "${parsed.sheetName}"`,
       error: parsed.rows.length ? null : "The workbook has the right columns but no dated rows.",
+      firstDate,
+      lastDate,
     });
   }, []);
 
@@ -149,6 +162,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           columns: [],
           source: "",
           error: body.message ?? `HTTP ${res.status}`,
+          firstDate: null,
+          lastDate: null,
         });
         return;
       }
@@ -161,6 +176,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         columns: [],
         source: "",
         error: (err as Error).message,
+        firstDate: null,
+        lastDate: null,
       });
     }
   }, [applyWorkbook, notify]);

@@ -82,6 +82,8 @@ export const MONTH_NAMES = MONTHS_FULL;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** format(d, "%b") — used where the card title already names the year. */
+export const fmtMonthShort = (d: Date) => MONTHS_SHORT[d.getMonth()];
 /** format(d, "%b %Y") */
 export const fmtMonthYear = (d: Date) => `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 /** format(d, "%B %Y") */

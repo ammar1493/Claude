@@ -20,7 +20,7 @@ import {
 } from "@/lib/dates";
 import { fmtInt, fmtNum, round1 } from "@/lib/format";
 import { filterWindow, withDates } from "@/lib/manual";
-import { hbar, headroom, line, rankedColors, rankedColorsOf, vbar } from "@/lib/plots";
+import { hbar, headroom, line, rankedColors, rankedColorsOf, vbar, wrapLabel } from "@/lib/plots";
 import { useDashboard } from "@/state/DashboardContext";
 import { ManualEntryPanel } from "./ManualEntryPanel";
 
@@ -437,13 +437,24 @@ export function Qiddiya() {
             ]}
             layout={{
               barmode: "group",
-              xaxis: { title: { text: "" }, type: "category", tickfont: { size: 10 } },
+              // Track names run long ("Class 7 / Mobile / Outbound"), so each
+              // tick is wrapped onto short lines instead of colliding with its
+              // neighbour. The bars keep the full name in their hover text.
+              xaxis: {
+                title: { text: "" },
+                type: "category",
+                tickfont: { size: 10 },
+                tickangle: 0,
+                tickmode: "array",
+                tickvals: classUtilisation.map((c) => c.cls),
+                ticktext: classUtilisation.map((c) => wrapLabel(c.cls)),
+              },
               yaxis: {
                 title: { text: "Count" },
                 range: headroom(classUtilisation.map((c) => c.participants), 1.25, 1),
               },
               legend: { orientation: "h", x: 0, y: 1.12 },
-              margin: CHART_MARGIN_V,
+              margin: { ...CHART_MARGIN_V, b: 130 },
             }}
           />
         </Card>

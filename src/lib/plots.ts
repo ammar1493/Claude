@@ -133,6 +133,28 @@ export function rankedColorsOf(base: string, count: number, leader: "last" | "fi
   return Array.from({ length: count }, (_, i) => (i === at ? NEFT_GOLD : base));
 }
 
+/**
+ * Wraps a long category label onto several lines at word boundaries, so a name
+ * like "Class 7 / Mobile / Outbound" stops colliding with its neighbours.
+ * Plotly renders <br> inside tick text.
+ */
+export function wrapLabel(label: string, maxChars = 14): string {
+  const words = String(label).split(/\s+/).filter(Boolean);
+  if (!words.length) return label;
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (!line) line = w;
+    else if (line.length + 1 + w.length <= maxChars) line += ` ${w}`;
+    else {
+      lines.push(line);
+      line = w;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join("<br>");
+}
+
 /** `range = c(0, max(values) * factor)` — the headroom for outside labels. */
 export function headroom(values: number[], factor = 1.2, plus = 0): [number, number] {
   const max = values.reduce((m, v) => (Number.isFinite(v) && v > m ? v : m), 0);

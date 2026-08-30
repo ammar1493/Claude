@@ -7,7 +7,7 @@ import Plot from "@/components/Plot";
 import { groupBy, nDistinct } from "@/lib/agg";
 import { NEFT_GOLD, NEFT_GREEN, NEFT_NAVY, NEFT_TEAL } from "@/lib/brand";
 import { MANUAL_2023, TOTAL_2023_PARTICIPANTS } from "@/lib/config";
-import { floorMonth, fmtMonthYear } from "@/lib/dates";
+import { floorMonth, fmtMonthShort } from "@/lib/dates";
 import { headroom, vbar } from "@/lib/plots";
 import { fmtInt } from "@/lib/format";
 import { useDashboard } from "@/state/DashboardContext";
@@ -42,7 +42,7 @@ export function YearOverYear() {
     const year = Number(filters.year);
     if (year === 2023) {
       return MANUAL_2023.map((m) => ({
-        label: fmtMonthYear(new Date(m.year, m.monthNum - 1, 1)),
+        label: fmtMonthShort(new Date(m.year, m.monthNum - 1, 1)),
         participants: m.participants,
         sessions: null as number | null,
       }));
@@ -58,7 +58,7 @@ export function YearOverYear() {
         sessions: nDistinct(rs.map((r) => r.actualSession)) as number | null,
       }))
       .sort((a, b) => a.month.getTime() - b.month.getTime())
-      .map((m) => ({ label: fmtMonthYear(m.month), participants: m.participants, sessions: m.sessions }));
+      .map((m) => ({ label: fmtMonthShort(m.month), participants: m.participants, sessions: m.sessions }));
   }, [rows, filters.year]);
 
   const monthlySessions = monthly.filter((m) => m.sessions !== null) as {
@@ -353,13 +353,13 @@ export function YearOverYear() {
               }),
             ]}
             layout={{
-              xaxis: { title: { text: "" }, tickangle: -45, type: "category" },
+              xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
               yaxis: {
                 title: { text: "Participants" },
                 tickformat: ",",
-                range: headroom(monthly.map((m) => m.participants)),
+                range: headroom(monthly.map((m) => m.participants), 1.25),
               },
-              margin: { l: 70, r: 50, t: 50, b: 110 },
+              margin: { l: 80, r: 50, t: 50, b: 50 },
               showlegend: false,
             }}
           />
@@ -381,13 +381,13 @@ export function YearOverYear() {
               }),
             ]}
             layout={{
-              xaxis: { title: { text: "" }, tickangle: -45, type: "category" },
+              xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
               yaxis: {
                 title: { text: "Sessions" },
                 tickformat: ",",
-                range: headroom(monthlySessions.map((m) => m.sessions)),
+                range: headroom(monthlySessions.map((m) => m.sessions), 1.25),
               },
-              margin: { l: 70, r: 50, t: 50, b: 110 },
+              margin: { l: 80, r: 50, t: 50, b: 50 },
               showlegend: false,
             }}
           />

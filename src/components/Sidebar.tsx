@@ -2,9 +2,10 @@
 
 import { useRef } from "react";
 import { YEAR_CHOICES } from "@/lib/config";
-import { fromISODate, toISODate } from "@/lib/dates";
+import { fmtDayMonthYear, fromISODate, toISODate } from "@/lib/dates";
 import { validFilteredDf } from "@/lib/selectors";
 import { useDashboard } from "@/state/DashboardContext";
+import { fmtInt } from "@/lib/format";
 import { Icon } from "./Icons";
 import { MultiSelect } from "./MultiSelect";
 
@@ -178,9 +179,17 @@ export function Sidebar({ onPrint }: { onPrint: () => void }) {
           <span aria-hidden className="h-3 w-1 rounded-full bg-gold" />
           Workbook
         </p>
-        <p className="mb-3 break-words leading-relaxed">
+        <p className="mb-2 break-words leading-relaxed">
           {dataset.source || dataset.error || "Not loaded"}
         </p>
+        {dataset.status === "ready" && dataset.firstDate && dataset.lastDate && (
+          // Makes it obvious whether the upload is the current export: a total
+          // that looks low is usually a workbook that stops early.
+          <p className="mb-3 leading-relaxed text-white/85">
+            {fmtInt(dataset.rows.length)} rows · {fmtDayMonthYear(dataset.firstDate)} –{" "}
+            <span className="font-bold text-gold">{fmtDayMonthYear(dataset.lastDate)}</span>
+          </p>
+        )}
         <input
           ref={fileRef}
           type="file"

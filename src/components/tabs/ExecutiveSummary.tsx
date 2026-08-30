@@ -7,7 +7,7 @@ import Plot from "@/components/Plot";
 import { Delta, DeltaPct, StatTile, ValueBox } from "@/components/ValueBox";
 import { ascending, groupBy, nDistinct, topN } from "@/lib/agg";
 import { NEFT_GOLD, NEFT_NAVY } from "@/lib/brand";
-import { floorMonth, fmtMonthYear, periodFloor } from "@/lib/dates";
+import { floorMonth, fmtMonthShort, periodFloor } from "@/lib/dates";
 import { fmtInt, fmtNum, pct, round1 } from "@/lib/format";
 import { hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import { chartDf, periodStats, sessionsCount, strategicDf } from "@/lib/selectors";
@@ -359,22 +359,26 @@ export function ExecutiveSummary({
       </div>
 
       {/* Monthly participants for the selected year */}
-      <Card title="Monthly Participants (Selected Year)" tone="marked">
+      <Card title={`Monthly Participants — ${filters.year}`} tone="marked">
         <Plot
           height={380}
           emptyMessage={monthly.length ? null : `No records for ${filters.year}`}
           data={[
             vbar({
-              labels: monthly.map((m) => fmtMonthYear(m.month)),
+              labels: monthly.map((m) => fmtMonthShort(m.month)),
               values: monthly.map((m) => m.participants),
               color: NEFT_NAVY,
               hovertemplate: "<b>%{x}</b><br>Participants: %{y}<extra></extra>",
             }),
           ]}
           layout={{
-            xaxis: { title: { text: "" }, tickangle: -45, type: "category" },
-            yaxis: { title: { text: "Participants" }, range: headroom(monthly.map((m) => m.participants)) },
-            margin: { b: 100 },
+            xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
+            yaxis: {
+              title: { text: "Participants" },
+              tickformat: ",",
+              range: headroom(monthly.map((m) => m.participants), 1.25),
+            },
+            margin: { l: 80, r: 40, t: 40, b: 50 },
             showlegend: false,
           }}
         />
