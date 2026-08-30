@@ -13,7 +13,29 @@ import { hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import { chartDf, periodStats, sessionsCount, strategicDf } from "@/lib/selectors";
 import { isWellSharpCourse } from "@/lib/wellsharp";
 import { useDashboard } from "@/state/DashboardContext";
-import { useProjectTotals } from "./projectTotals";
+import { usePeriodTotals, useProjectTotals } from "./projectTotals";
+
+/** Shows what a combined KPI is made of, so a filtered figure stays readable. */
+function SourceSplit({
+  neft,
+  qd,
+  tk,
+  show,
+}: {
+  neft: number;
+  qd: number;
+  tk: number;
+  show: boolean;
+}) {
+  if (!show) return null;
+  return (
+    <span className="block text-[11px] font-normal opacity-80">
+      NEFT {fmtInt(neft)}
+      {qd > 0 ? ` + Qiddiya ${fmtInt(qd)}` : ""}
+      {tk > 0 ? ` + Takamol ${fmtInt(tk)}` : ""}
+    </span>
+  );
+}
 
 export function ExecutiveSummary({
   projectScope,
@@ -30,17 +52,21 @@ export function ExecutiveSummary({
   const strategic = useMemo(() => strategicDf(rows, filters), [rows, filters]);
   const projects = useProjectTotals(projectScope, ps);
 
-  const curParticipants = ps.cur.length;
-  const prevParticipants = ps.prev.length;
-  const curSessions = sessionsCount(ps.cur);
-  const prevSessions = sessionsCount(ps.prev);
-  const avgClassSize = curSessions ? round1(curParticipants / curSessions) : null;
+  /**
+   * The headline KPIs cover every source: the NEFT training workbook plus
+   * Qiddiya and Takamol, both clipped to the same period so the comparison
+   * against the prior window stays like-for-like.
+   */
+  const totals = usePeriodTotals(ps);
+  const avgClassSize = totals.avgClassSize;
 
   // --- WellSharp at a glance (wellsharp_period_stats) ---
   const wsCur = useMemo(() => ps.cur.filter((r) => isWellSharpCourse(r.courseName)), [ps.cur]);
   const wsPrev = useMemo(() => ps.prev.filter((r) => isWellSharpCourse(r.courseName)), [ps.prev]);
   const wsCourses = nDistinct(wsCur.map((r) => r.courseName));
   const wsVsPrior = wsPrev.length ? pct(wsCur.length - wsPrev.length, wsPrev.length) : null;
+  // WellSharp courses only ever appear in the NEFT workbook, so the share is
+  // taken against NEFT participants rather than the all-sources headline.
   const wsPctOfTotal = ps.cur.length ? pct(wsCur.length, ps.cur.length) : 0;
 
   // --- Charts ---
@@ -117,28 +143,48 @@ export function ExecutiveSummary({
         </p>
       </div>
 
-      {/* Core KPIs */}
+      {/* Headline KPIs: NEFT Data + Qiddiya + Takamol */}
       <div className="grid gap-4 md:grid-cols-3">
         <ValueBox
           title="Total Participants"
-          value={fmtInt(curParticipants)}
+          value={fmtInt(totals.participants)}
           showcase={<Icon name="people" size={34} />}
           theme="primary"
-          footer={<Delta diff={curParticipants - prevParticipants} />}
+          footer={
+            <div className="space-y-0.5">
+              <Delta diff={totals.participants - totals.prevParticipants} />
+              <SourceSplit
+                neft={totals.neftParticipants}
+                qd={totals.split.qdParticipants}
+                tk={totals.split.tkParticipants}
+                show={totals.hasProjects}
+              />
+            </div>
+          }
         />
         <ValueBox
           title="Unique Sessions"
-          value={fmtInt(curSessions)}
+          value={fmtInt(totals.sessions)}
           showcase={<Icon name="calendar" size={34} />}
           theme="accent"
-          footer={<Delta diff={curSessions - prevSessions} />}
+          footer={
+            <div className="space-y-0.5">
+              <Delta diff={totals.sessions - totals.prevSessions} />
+              <SourceSplit
+                neft={totals.neftSessions}
+                qd={totals.split.qdSessions}
+                tk={totals.split.tkSessions}
+                show={totals.hasProjects}
+              />
+            </div>
+          }
         />
         <ValueBox
           title="Avg Class Size"
           value={avgClassSize === null ? "N/A" : fmtNum(avgClassSize)}
           showcase={<Icon name="speedometer" size={34} />}
           theme="light"
-          footer={<span className="text-slate-500">Students per Session</span>}
+          footer={<span className="text-slate-ink">Participants per session, all sources</span>}
         />
       </div>
 
@@ -172,7 +218,7 @@ export function ExecutiveSummary({
             compact
           />
           <ValueBox
-            title="% of Total Participants"
+            title="% of NEFT Data"
             value={`${wsPctOfTotal}%`}
             showcase={<Icon name="pie" size={28} />}
             theme="light"
@@ -210,43 +256,43 @@ export function ExecutiveSummary({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <ValueBox
             title="Qiddiya Participants"
-            value={fmtInt(projects.qdP)}
+            value={fmtInt(projects.qdParticipants)}
             showcase={<Icon name="building" size={28} />}
             theme="primary"
             compact
-            footer={`${fmtInt(projects.qdS)} sessions | ${fmtInt(projects.qdD)} teaching days`}
+            footer={`${fmtInt(projects.qdSessions)} sessions | ${fmtInt(projects.qdDays)} teaching days`}
           />
           <ValueBox
             title="Takamol Participants"
-            value={fmtInt(projects.tkP)}
+            value={fmtInt(projects.tkParticipants)}
             showcase={<Icon name="diagram" size={28} />}
             theme="accent"
             compact
-            footer={projects.tkS > 0 ? `${fmtInt(projects.tkS)} sessions` : "Manually entered"}
+            footer={projects.tkSessions > 0 ? `${fmtInt(projects.tkSessions)} sessions` : "Manually entered"}
           />
           <ValueBox
             title="Grand Total Participants"
-            value={fmtInt(projects.grandP)}
+            value={fmtInt(projects.grandParticipants)}
             showcase={<Icon name="people" size={28} />}
             theme="light"
             compact
             footer={
-              <span className="text-slate-500">
-                Core {fmtInt(projects.coreP)} + Qiddiya {fmtInt(projects.qdP)} + Takamol{" "}
-                {fmtInt(projects.tkP)}
+              <span className="text-slate-ink">
+                NEFT Data {fmtInt(projects.neftParticipants)} + Qiddiya{" "}
+                {fmtInt(projects.qdParticipants)} + Takamol {fmtInt(projects.tkParticipants)}
               </span>
             }
           />
           <ValueBox
             title="Grand Total Sessions"
-            value={fmtInt(projects.grandS)}
+            value={fmtInt(projects.grandSessions)}
             showcase={<Icon name="calendar-check" size={28} />}
             theme="light"
             compact
             footer={
-              <span className="text-slate-500">
-                Core {fmtInt(projects.coreS)} + Qiddiya {fmtInt(projects.qdS)} + Takamol{" "}
-                {fmtInt(projects.tkS)}
+              <span className="text-slate-ink">
+                NEFT Data {fmtInt(projects.neftSessions)} + Qiddiya {fmtInt(projects.qdSessions)} +
+                Takamol {fmtInt(projects.tkSessions)}
               </span>
             }
           />
@@ -254,7 +300,8 @@ export function ExecutiveSummary({
         <p className="mt-3 flex items-start gap-2 text-xs text-slate-500">
           <Icon name="info" size={14} className="mt-0.5 shrink-0" />
           Scope: {projects.label}. Qiddiya combines the QCTA workbook with manual entries; Takamol is
-          fully manual. The three KPI cards at the top of this page remain the core NEFT dataset only.
+          fully manual. Neither carries a client or course, so the Filter by Client and Filter by
+          Course controls apply to the NEFT Data figures only.
         </p>
       </Card>
 

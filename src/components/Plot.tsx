@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useCardExpanded } from "./Card";
 import { PLOT_FONT } from "@/lib/brand";
 
 type PlotlyModule = import("plotly.js-dist-min").PlotlyStatic;
@@ -45,6 +46,9 @@ function mergeAxis(base: unknown, extra: unknown): Record<string, unknown> {
 export default function Plot({ data, layout, height = 420, className, emptyMessage }: PlotProps) {
   const ref = useRef<HTMLDivElement>(null);
   const plotted = useRef(false);
+  // Inside an expanded card the chart fills the space instead of its inline
+  // height, so plotly is told to lay out against the container.
+  const expanded = useCardExpanded();
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +59,7 @@ export default function Plot({ data, layout, height = 420, className, emptyMessa
     const merged: Record<string, unknown> = {
       ...BASE_LAYOUT,
       ...layout,
-      height,
+      ...(expanded ? { autosize: true } : { height }),
       xaxis: mergeAxis(BASE_LAYOUT.xaxis, layout?.xaxis),
       yaxis: mergeAxis(BASE_LAYOUT.yaxis, layout?.yaxis),
       margin: { l: 60, r: 30, t: 40, b: 50, ...(layout?.margin as object) },
@@ -70,7 +74,27 @@ export default function Plot({ data, layout, height = 420, className, emptyMessa
     return () => {
       cancelled = true;
     };
-  }, [data, layout, height, emptyMessage]);
+  }, [data, layout, height, emptyMessage, expanded]);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (!plotted.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        loadPlotly().then((Plotly) => {
+          if (ref.current) Plotly.Plots.resize(ref.current);
+        });
+      });
+    });
+    observer.observe(node);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const node = ref.current;
@@ -83,13 +107,21 @@ export default function Plot({ data, layout, height = 420, className, emptyMessa
   if (emptyMessage) {
     return (
       <div
-        className={`flex items-center justify-center rounded-lg bg-slate-50 text-sm text-slate-500 ${className ?? ""}`}
-        style={{ height }}
+        className={`flex items-center justify-center rounded-lg bg-fog text-sm text-slate-ink ${
+          expanded ? "min-h-0 flex-1" : ""
+        } ${className ?? ""}`}
+        style={expanded ? undefined : { height }}
       >
         {emptyMessage}
       </div>
     );
   }
 
-  return <div ref={ref} className={className} style={{ height, width: "100%" }} />;
+  return (
+    <div
+      ref={ref}
+      className={`${expanded ? "min-h-0 flex-1" : ""} ${className ?? ""}`}
+      style={expanded ? { width: "100%" } : { height, width: "100%" }}
+    />
+  );
 }

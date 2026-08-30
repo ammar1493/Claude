@@ -83,19 +83,19 @@ export function YearOverYear() {
     return years.map((year) => {
       const core = yearly.find((y) => y.year === year);
       const proj = projectYears.find((y) => y.year === year);
-      const coreParticipants = core?.participants ?? 0;
-      const coreSessions = core?.sessions ?? 0;
+      const neftParticipants = core?.participants ?? 0;
+      const neftSessions = core?.sessions ?? 0;
       return {
         year,
         label: String(year),
-        coreParticipants,
-        coreSessions,
+        neftParticipants,
+        neftSessions,
         qdParticipants: proj?.qdParticipants ?? 0,
         qdSessions: proj?.qdSessions ?? 0,
         tkParticipants: proj?.tkParticipants ?? 0,
         tkSessions: proj?.tkSessions ?? 0,
         grandParticipants:
-          coreParticipants + (proj?.qdParticipants ?? 0) + (proj?.tkParticipants ?? 0),
+          neftParticipants + (proj?.qdParticipants ?? 0) + (proj?.tkParticipants ?? 0),
       };
     });
   }, [yearly, projectYears]);
@@ -119,7 +119,7 @@ export function YearOverYear() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title="Total Participants by Year" tone="marked">
           <p className="mb-2 text-xs text-slate-ink">
-            Core NEFT dataset only. Qiddiya and Takamol are shown separately below.
+            NEFT Data only. Qiddiya and Takamol are shown separately below.
           </p>
           <Plot
             height={470}
@@ -273,7 +273,7 @@ export function YearOverYear() {
 
       <Card title="Grand Total Participants by Year" tone="navy">
         <p className="mb-2 text-xs text-slate-ink">
-          Core NEFT dataset, Qiddiya Academy and Takamol stacked into one figure per year.
+          NEFT Data, Qiddiya Academy and Takamol stacked into one figure per year.
         </p>
         <Plot
           height={420}
@@ -281,9 +281,9 @@ export function YearOverYear() {
           data={[
             vbar({
               labels: combined.map((c) => c.label),
-              values: combined.map((c) => c.coreParticipants),
+              values: combined.map((c) => c.neftParticipants),
               color: NEFT_NAVY,
-              name: "Core NEFT",
+              name: "NEFT Data",
               text: [],
               hovertemplate: "<b>%{x}</b><br>Core: %{y:,}<extra></extra>",
             }),

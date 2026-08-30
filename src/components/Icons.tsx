@@ -13,7 +13,7 @@ export type IconName =
   | "people" | "calendar" | "calendar-check" | "speedometer" | "mortarboard" | "pie" | "diagram"
   | "clock" | "clock-history" | "graph-up" | "book" | "check-circle" | "download" | "refresh"
   | "plus" | "trash" | "info" | "trophy" | "leaf" | "award" | "filter" | "pencil" | "upload"
-  | "printer" | "x" | "warning" | "arrow-up";
+  | "printer" | "x" | "warning" | "arrow-up" | "expand" | "collapse";
 
 const PATHS: Record<IconName, string> = {
   gauge: "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm1.4-3.4L18 6M3 20a9 9 0 1 1 18 0",
@@ -51,6 +51,8 @@ const PATHS: Record<IconName, string> = {
   x: "M6 6l12 12M18 6 6 18",
   warning: "M12 4 2.5 20h19L12 4Zm0 6v5m0 2.5v.5",
   "arrow-up": "M12 19V5m0 0-6 6m6-6 6 6",
+  expand: "M9 4H4v5M4 4l6 6M15 4h5v5m0-5-6 6M9 20H4v-5m0 5 6-6M15 20h5v-5m0 5-6-6",
+  collapse: "M4 9h5V4M9 9 3 3M20 9h-5V4m0 5 6-6M4 15h5v5m-5 0 6-6M20 15h-5v5m0-5 6 6",
 };
 
 export function Icon({
