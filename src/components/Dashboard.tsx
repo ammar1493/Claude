@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { useDashboard } from "@/state/DashboardContext";
 import { Icon, type IconName } from "./Icons";
 import { Sidebar } from "./Sidebar";
+import { WorkbookBar } from "./WorkbookBar";
 import { WorkbookDropzone } from "./WorkbookDropzone";
 import { ExecutiveSummary } from "./tabs/ExecutiveSummary";
 import { Hse } from "./tabs/Hse";
@@ -84,6 +85,7 @@ export function Dashboard() {
             <WorkbookDropzone note={dataset.error} />
           ) : (
             <>
+              <WorkbookBar />
               {active === "exec" && (
                 <ExecutiveSummary projectScope={projectScope} onProjectScopeChange={setProjectScope} />
               )}
@@ -101,6 +103,7 @@ export function Dashboard() {
             <img src={BRAND.logo} alt="" aria-hidden className="h-7 w-auto opacity-70" />
             <p>
               {BRAND.name} · Training Analytics · {new Date().getFullYear()}
+              {process.env.NEXT_PUBLIC_BUILD_SHA ? ` · build ${process.env.NEXT_PUBLIC_BUILD_SHA}` : ""}
             </p>
           </footer>
         </main>
