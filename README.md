@@ -16,7 +16,7 @@ using the same aggregation rules so the numbers match.
 | WellSharp | Course-hours reference, period teaching hours and sessions, top-6 instructors, course breakdown, retakes, top-5 clients, instructor detail |
 | Qiddiya Academy | Figures parsed from QCTA trainer-utilization workbooks, merged with manual months |
 | Takamol | Fully manual monthly figures, cumulative and yearly views |
-| Quality Metrics | Instructor evaluation scores read from the published Google workbook |
+| Quality Metrics | A scorecard over all thirteen evaluation questions: overall score, weakest questions, an instructor-by-question grid, who needs attention, and the raw counts per question |
 | Data Table | The filtered raw rows |
 
 ## Brand system
@@ -96,8 +96,11 @@ the unlabelled block at the bottom (Waqas Anjum · Confined Space Rescue · 27 J
 whose 14 students its Students total does include. The parser counts every
 course cell, which is what app.R did.
 
-**Quality Metrics** (`/api/sheet?name=…`): the published Google workbook, fetched
-server-side so the request stays same-origin.
+**Quality Metrics** (`/api/quality`): the published Google workbook, fetched and
+parsed server-side in one pass. It expects one tab per question, the instructor
+in the first column and the counts of 1–5 star responses in the next five —
+the layout app.R read. Point `NEFT_QUALITY_XLSX_URL` at a different workbook to
+override it. Missing tabs are reported on the tab rather than failing the page.
 
 ## Deploying to Vercel
 

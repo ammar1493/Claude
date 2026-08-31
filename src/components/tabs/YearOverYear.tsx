@@ -2,16 +2,39 @@
 
 import { useMemo } from "react";
 import { Alert, Card, SectionTitle } from "@/components/Card";
+import { DataTable } from "@/components/DataTable";
 import { Icon } from "@/components/Icons";
 import Plot from "@/components/Plot";
 import { groupBy, nDistinct } from "@/lib/agg";
-import { NEFT_GOLD, NEFT_GREEN, NEFT_NAVY, NEFT_TEAL } from "@/lib/brand";
+import { NEFT_GOLD, NEFT_GREEN, NEFT_NAVY, NEFT_SLATE, NEFT_TEAL } from "@/lib/brand";
 import { MANUAL_2023, TOTAL_2023_PARTICIPANTS } from "@/lib/config";
 import { floorMonth, fmtMonthShort } from "@/lib/dates";
 import { headroom, vbar } from "@/lib/plots";
 import { fmtInt } from "@/lib/format";
 import { useDashboard } from "@/state/DashboardContext";
 import { projectGrandTotals, useProjectYears } from "./projectYears";
+
+/** Percentage change in NEFT participants against the previous year. */
+function yearChange(
+  rows: { year: number; neftParticipants: number }[],
+  year: number,
+): number | null {
+  const i = rows.findIndex((r) => r.year === year);
+  if (i <= 0) return null;
+  const prev = rows[i - 1].neftParticipants;
+  if (!prev) return null;
+  return ((rows[i].neftParticipants - prev) / prev) * 100;
+}
+
+function Change({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-slate-ink/50">—</span>;
+  const up = value >= 0;
+  return (
+    <span className={`font-semibold tabular-nums ${up ? "text-teal" : "text-slate-ink"}`}>
+      {up ? "▲" : "▼"} {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}
 
 export function YearOverYear() {
   const { dataset, filters } = useDashboard();
@@ -119,7 +142,8 @@ export function YearOverYear() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title="Total Participants by Year" tone="marked">
           <p className="mb-2 text-xs text-slate-ink">
-            NEFT Data only. Qiddiya and Takamol are shown separately below.
+            NEFT Data only; Qiddiya and Takamol are below. The grey bar is 2023, which
+            predates the workbook and comes from the figures built into the app.
           </p>
           <Plot
             height={470}
@@ -128,7 +152,9 @@ export function YearOverYear() {
               vbar({
                 labels: yearly.map((y) => String(y.year)),
                 values: yearly.map((y) => y.participants),
-                color: NEFT_NAVY,
+                // 2023 predates the workbook and comes from the built-in
+                // monthly table, so it is drawn as the different thing it is.
+                color: yearly.map((y) => (y.sessions === null ? NEFT_SLATE : NEFT_NAVY)),
                 textSize: 14,
                 hovertemplate: "<b>%{x}</b><br>Participants: %{y:,}<extra></extra>",
               }),
@@ -173,6 +199,81 @@ export function YearOverYear() {
           />
         </Card>
       </div>
+
+      <Card title="Year Totals" tone="navy">
+        <p className="mb-3 text-xs text-slate-ink">
+          The same figures as the charts above, exactly. Change is against the previous year.
+        </p>
+        <DataTable
+          rows={combined}
+          pageLength={12}
+          dense
+          emptyMessage="No data loaded"
+          columns={[
+            {
+              key: "y",
+              header: "Year",
+              value: (r) => r.year,
+              render: (r) => (
+                <span className="font-bold text-navy">
+                  {r.year}
+                  {r.year === 2023 && <span className="ml-1 text-[10px] text-slate-ink">built-in</span>}
+                </span>
+              ),
+            },
+            {
+              key: "n",
+              header: "NEFT Participants",
+              value: (r) => r.neftParticipants,
+              align: "right",
+              render: (r) => <span className="font-semibold tabular-nums">{fmtInt(r.neftParticipants)}</span>,
+            },
+            {
+              key: "c",
+              header: "Change",
+              value: (r) => yearChange(combined, r.year) ?? -Infinity,
+              align: "right",
+              render: (r) => <Change value={yearChange(combined, r.year)} />,
+            },
+            {
+              key: "s",
+              header: "NEFT Sessions",
+              value: (r) => r.neftSessions,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.neftSessions ? fmtInt(r.neftSessions) : "—"}</span>
+              ),
+            },
+            {
+              key: "q",
+              header: "Qiddiya",
+              value: (r) => r.qdParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.qdParticipants ? fmtInt(r.qdParticipants) : "—"}</span>
+              ),
+            },
+            {
+              key: "t",
+              header: "Takamol",
+              value: (r) => r.tkParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.tkParticipants ? fmtInt(r.tkParticipants) : "—"}</span>
+              ),
+            },
+            {
+              key: "g",
+              header: "Grand Total",
+              value: (r) => r.grandParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="font-bold tabular-nums text-navy">{fmtInt(r.grandParticipants)}</span>
+              ),
+            },
+          ]}
+        />
+      </Card>
 
       <SectionTitle className="mt-4">Special Projects by Year</SectionTitle>
       <p className="-mt-3 text-sm text-slate-ink">
