@@ -15,14 +15,21 @@ export function excelSerialToDate(serial: number): Date {
 
 /**
  * Coerce any cell into a local-midnight Date, or null.
- * SheetJS hands back Dates in UTC, so the UTC parts are what we rebuild from —
- * reading the local parts would shift a date by a day west of Greenwich.
+ *
+ * Workbooks are read with cellDates disabled, so a date cell arrives as its raw
+ * Excel serial and is converted here — a fixed arithmetic on the 1899-12-30
+ * origin that gives the same day in every timezone.
+ *
+ * SheetJS's own cellDates conversion builds Dates at *local* midnight. Reading
+ * the UTC parts of one of those moves the date back a day for any viewer ahead
+ * of UTC, which silently reassigns every 1 January row to the previous year.
+ * If a Date does reach here, its local parts are therefore the intended day.
  */
 export function cellToDate(value: unknown): Date | null {
   if (value === null || value === undefined || value === "") return null;
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
-    return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return null;
@@ -86,7 +93,8 @@ export interface ParsedWorkbook {
  * column the remaining sheets are scanned rather than failing outright.
  */
 export function parseTrainingWorkbook(data: ArrayBuffer | Uint8Array): ParsedWorkbook {
-  const wb = XLSX.read(data, { cellDates: true });
+  // cellDates is deliberately off — see cellToDate().
+  const wb = XLSX.read(data, { cellDates: false });
   const errors: string[] = [];
 
   for (const sheetName of wb.SheetNames) {
@@ -140,7 +148,7 @@ export function readSheetAsMatrix(
   data: ArrayBuffer | Uint8Array,
   sheetName: string,
 ): { header: string[]; rows: (string | number | null)[][] } | null {
-  const wb = XLSX.read(data, { cellDates: true });
+  const wb = XLSX.read(data, { cellDates: false });
   const match =
     wb.SheetNames.find((n) => n === sheetName) ??
     wb.SheetNames.find((n) => n.trim().toLowerCase() === sheetName.trim().toLowerCase());

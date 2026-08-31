@@ -40,18 +40,26 @@ export function YearOverYear() {
   const { dataset, filters } = useDashboard();
   const rows = dataset.rows;
 
-  /** yearly_comparison_data(): the workbook years plus the manual 2023 total. */
+  /**
+   * yearly_comparison_data(): the workbook years, seeded with the built-in 2023
+   * total.
+   *
+   * Keyed by year rather than concatenated, so a year can only appear once. If
+   * the workbook ever carries 2023 rows those records win over the built-in
+   * figure, which is the estimate they would supersede.
+   */
   const yearly = useMemo(() => {
-    const fromWorkbook = [...groupBy(rows, (r) => r.date.getFullYear()).entries()].map(
-      ([year, rs]) => ({
+    const byYear = new Map<number, { year: number; participants: number; sessions: number | null }>([
+      [2023, { year: 2023, participants: TOTAL_2023_PARTICIPANTS, sessions: null }],
+    ]);
+    for (const [year, rs] of groupBy(rows, (r) => r.date.getFullYear()).entries()) {
+      byYear.set(year, {
         year,
         participants: rs.length,
-        sessions: nDistinct(rs.map((r) => r.actualSession)) as number | null,
-      }),
-    );
-    return [{ year: 2023, participants: TOTAL_2023_PARTICIPANTS, sessions: null }, ...fromWorkbook].sort(
-      (a, b) => a.year - b.year,
-    );
+        sessions: nDistinct(rs.map((r) => r.actualSession)),
+      });
+    }
+    return [...byYear.values()].sort((a, b) => a.year - b.year);
   }, [rows]);
 
   const yearlySessions = yearly.filter((y) => y.sessions !== null) as {

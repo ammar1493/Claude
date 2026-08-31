@@ -85,23 +85,28 @@ export function DataTable<T>({
     onSelectedChange([...set]);
   };
 
+  // A search box over a handful of rows is noise; the rows are all on screen.
+  const showToolbar = filterRow || rows.length > 8;
+
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(0);
-          }}
-          placeholder="Search…"
-          className="w-56 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-navy focus:ring-2 focus:ring-navy/20"
-        />
-        <span className="text-xs text-slate-500">
-          {filtered.length.toLocaleString("en-US")} row{filtered.length === 1 ? "" : "s"}
-        </span>
-      </div>
+      {showToolbar && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Search…"
+            className="w-56 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-navy focus:ring-2 focus:ring-navy/20"
+          />
+          <span className="text-xs text-slate-ink">
+            {filtered.length.toLocaleString("en-US")} row{filtered.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
 
       <div className="neft-scroll flex-1 overflow-auto rounded-lg ring-1 ring-slate-200">
         <table className="min-w-full border-collapse text-sm">
