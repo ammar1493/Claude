@@ -159,7 +159,7 @@ export function Sidebar({ onPrint }: { onPrint: () => void }) {
       <button
         type="button"
         onClick={onPrint}
-        className="mb-2 flex w-full items-center justify-center gap-2 rounded-md bg-gold px-3 py-2.5 text-sm font-bold text-navy transition hover:brightness-105"
+        className="mb-2 flex w-full items-center justify-center gap-2 rounded-md bg-gold ps-3 pe-2.5 py-2.5 text-sm font-bold text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:brightness-105"
       >
         <Icon name="printer" size={16} /> Generate PDF Report
       </button>
@@ -167,7 +167,7 @@ export function Sidebar({ onPrint }: { onPrint: () => void }) {
       <button
         type="button"
         onClick={exportCsv}
-        className="flex w-full items-center justify-center gap-2 rounded-md border border-white/25 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-white/25 ps-3 pe-2.5 py-2.5 text-sm font-bold text-white transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-white/10"
       >
         <Icon name="download" size={16} /> Export Data (CSV)
       </button>
@@ -205,7 +205,7 @@ export function Sidebar({ onPrint }: { onPrint: () => void }) {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex items-center justify-center gap-2 rounded-md border border-white/25 px-3 py-2 font-bold text-white hover:bg-white/10"
+            className="flex items-center justify-center gap-2 rounded-md border border-white/25 px-3 py-2 font-bold text-white transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-white/10"
           >
             <Icon name="upload" size={14} /> Upload new workbook
           </button>
@@ -213,14 +213,14 @@ export function Sidebar({ onPrint }: { onPrint: () => void }) {
             <button
               type="button"
               onClick={() => void refetchDataset()}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-white/15 px-2 py-1.5 text-white/75 hover:bg-white/10"
+              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-white/15 px-2 py-1.5 text-white/75 transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-white/10 hover:text-white"
             >
               <Icon name="refresh" size={13} /> Reload
             </button>
             <button
               type="button"
               onClick={() => void clearUploadedDataset()}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-white/15 px-2 py-1.5 text-white/75 hover:bg-white/10"
+              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-white/15 px-2 py-1.5 text-white/75 transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-white/10 hover:text-white"
             >
               <Icon name="trash" size={13} /> Clear
             </button>

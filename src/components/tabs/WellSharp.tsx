@@ -237,7 +237,7 @@ export function WellSharp() {
         courses.
       </Alert>
 
-      <Card title="WellSharp Course Hours Reference" tone="navy" className="min-h-[380px]">
+      <Card title="WellSharp Course Hours Reference" tone="navy" className="min-h-[380px]" inset>
         <DataTable rows={WELLSHARP_HOURS} columns={refColumns} pageLength={7} dense />
       </Card>
 
@@ -386,7 +386,7 @@ export function WellSharp() {
           />
         </Card>
 
-        <Card title="WellSharp Summary" tone="navy" className="xl:col-span-5">
+        <Card title="WellSharp Summary" tone="navy" className="xl:col-span-5" inset>
           {!summary ? (
             <div className="flex h-64 flex-col items-center justify-center text-slate-400">
               <Icon name="warning" size={40} />
@@ -442,7 +442,7 @@ export function WellSharp() {
           />
         </Card>
 
-        <Card title="Course Retakes Analysis" tone="marked">
+        <Card title="Course Retakes Analysis" tone="marked" inset>
           <p className="mb-2 text-xs text-slate-500">Participants who took Retake Exam</p>
           <Plot
             height={250}
@@ -546,7 +546,7 @@ export function WellSharp() {
         />
       </Card>
 
-      <Card title="Instructor Detail Table" tone="navy">
+      <Card title="Instructor Detail Table" tone="navy" inset>
         <DataTable
           rows={detailRows}
           pageLength={15}

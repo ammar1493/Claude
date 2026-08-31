@@ -57,7 +57,7 @@ export function Dashboard() {
                 type="button"
                 onClick={() => setActive(t.id)}
                 aria-current={active === t.id ? "page" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition ${
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] ${
                   active === t.id
                     ? "bg-navy text-white"
                     : "text-slate-ink hover:bg-navy-050 hover:text-navy"
@@ -118,7 +118,7 @@ export function Dashboard() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2 rounded-lg border-l-4 bg-white px-4 py-3 text-sm text-navy ring-1 ring-hairline ${
+            className={`surface-raised stage stage-1 pointer-events-auto flex items-start gap-2 rounded-xl border-l-4 bg-white px-4 py-3 text-sm text-navy ${
               t.tone === "error"
                 ? "border-l-[#B3261E]"
                 : t.tone === "warning"
@@ -127,7 +127,12 @@ export function Dashboard() {
             }`}
           >
             <span className="flex-1">{t.message}</span>
-            <button type="button" onClick={() => dismissToast(t.id)} aria-label="Dismiss">
+            <button
+              type="button"
+              onClick={() => dismissToast(t.id)}
+              aria-label="Dismiss"
+              className="rounded transition-[color,scale] duration-150 ease-out hover:text-slate-ink active:scale-[0.96]"
+            >
               <Icon name="x" size={14} />
             </button>
           </div>

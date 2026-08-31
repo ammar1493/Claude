@@ -23,6 +23,109 @@
 
 :root {
   color-scheme: light;
+
+  /*
+   * Elevation, not outline. A card's edge is a three-layer shadow: a 1px ring,
+   * a short lift, and an ambient shade. Unlike a solid border it carries its
+   * own transparency, so the same token sits correctly on white, on fog, and
+   * over a chart.
+   */
+  --shadow-card:
+    0 0 0 1px oklch(0 0 0 / 0.06),
+    0 1px 2px -1px oklch(0 0 0 / 0.06),
+    0 2px 4px 0 oklch(0 0 0 / 0.04);
+  --shadow-card-hover:
+    0 0 0 1px oklch(0 0 0 / 0.08),
+    0 1px 2px -1px oklch(0 0 0 / 0.08),
+    0 2px 4px 0 oklch(0 0 0 / 0.06);
+  /* Lifted surfaces: the expanded chart, the select menu, a toast. */
+  --shadow-raised:
+    0 0 0 1px oklch(0 0 0 / 0.07),
+    0 8px 16px -6px oklch(0 0 0 / 0.14),
+    0 20px 40px -12px oklch(0 0 0 / 0.16);
+
+  --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Surfaces that read as elevated rather than outlined. */
+.surface-card {
+  box-shadow: var(--shadow-card);
+  transition-property: box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.surface-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+.surface-raised {
+  box-shadow: var(--shadow-raised);
+}
+
+/*
+ * One-shot entrance for the first paint of the dashboard, staged so the eye
+ * reads the period, then the headline figures, then the detail. Keyframes
+ * rather than transitions because it runs once and is never interrupted.
+ */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.stage {
+  opacity: 0;
+  animation: riseIn 420ms var(--ease-out-soft) forwards;
+}
+.stage-1 { animation-delay: 0ms; }
+.stage-2 { animation-delay: 90ms; }
+.stage-3 { animation-delay: 180ms; }
+.stage-4 { animation-delay: 270ms; }
+
+/* The expanded chart is an infrequent, one-shot reveal. */
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-zoom-in {
+  animation: zoomIn 200ms var(--ease-out-soft) forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 160ms ease-out forwards;
+}
+
+/*
+ * Every animation above is decoration over a state that is already legible
+ * without it, so reduced motion drops the movement rather than the content.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stage {
+    opacity: 1;
+  }
 }
 
 html,

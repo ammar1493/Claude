@@ -45,7 +45,7 @@ export function MultiSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-navy disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
       >
         <span className="truncate">
           {selected.length === 0 ? (
@@ -81,7 +81,7 @@ export function MultiSelect({
       )}
 
       {open && (
-        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-xl">
+        <div className="surface-raised animate-fade-in absolute z-40 mt-1 w-full overflow-hidden rounded-lg bg-white">
           <input
             autoFocus
             value={query}
@@ -96,7 +96,7 @@ export function MultiSelect({
                 key={c}
                 type="button"
                 onClick={() => toggle(c)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-navy hover:bg-navy/5"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-navy transition-colors duration-100 ease-out hover:bg-navy/5"
               >
                 <input type="checkbox" readOnly checked={selected.includes(c)} className="accent-navy" />
                 <span className="truncate">{c}</span>

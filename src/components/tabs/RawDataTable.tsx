@@ -25,7 +25,7 @@ export function RawDataTable() {
   }, [dataset.columns, rows]);
 
   return (
-    <Card title="Raw Data View" className="min-h-[700px]">
+    <Card title="Raw Data View" className="min-h-[700px]" inset>
       <DataTable
         rows={rows}
         columns={columns}

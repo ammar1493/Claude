@@ -27,7 +27,7 @@ export function WorkbookBar() {
     : dataset.source.replace(/ · sheet .*$/, "");
 
   return (
-    <div className="no-print mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border-l-4 border-l-navy bg-white px-4 py-2.5 text-xs ring-1 ring-hairline">
+    <div className="surface-card no-print mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 border-l-navy bg-white px-4 py-2.5 text-xs">
       <span className="font-bold uppercase tracking-[0.1em] text-slate-ink">Workbook</span>
 
       <span className="font-semibold text-navy">{name}</span>
@@ -65,7 +65,7 @@ export function WorkbookBar() {
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        className="ml-auto flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1 font-bold text-navy transition hover:bg-fog"
+        className="ml-auto flex items-center gap-1.5 rounded-md border border-hairline ps-2.5 pe-2 py-1 font-bold text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-fog"
       >
         <Icon name="upload" size={13} /> Replace
       </button>

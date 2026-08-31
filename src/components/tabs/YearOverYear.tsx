@@ -208,7 +208,7 @@ export function YearOverYear() {
         </Card>
       </div>
 
-      <Card title="Year Totals" tone="navy">
+      <Card title="Year Totals" tone="navy" inset>
         <p className="mb-3 text-xs text-slate-ink">
           The same figures as the charts above, exactly. Change is against the previous year.
         </p>

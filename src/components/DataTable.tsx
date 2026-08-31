@@ -117,7 +117,7 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   style={c.width ? { width: c.width } : undefined}
-                  className={`${pad} cursor-pointer select-none whitespace-nowrap text-left text-xs font-semibold uppercase tracking-wide`}
+                  className={`${pad} cursor-pointer select-none whitespace-nowrap text-left text-xs font-semibold uppercase tracking-wide transition-colors duration-100 ease-out hover:text-gold`}
                   onClick={() =>
                     setSort((s) =>
                       s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: 1 },
@@ -167,7 +167,7 @@ export function DataTable<T>({
                   onClick={() => toggleRow(index)}
                   className={`${i % 2 ? "bg-slate-50/70" : "bg-white"} ${
                     isSelected ? "!bg-gold/30" : ""
-                  } ${selectable ? "cursor-pointer" : ""} hover:bg-navy/5`}
+                  } ${selectable ? "cursor-pointer" : ""} transition-colors duration-100 ease-out hover:bg-navy/5`}
                 >
                   {selectable && (
                     <td className={pad}>
@@ -197,7 +197,7 @@ export function DataTable<T>({
             type="button"
             onClick={() => setPage(Math.max(0, current - 1))}
             disabled={current === 0}
-            className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-fog disabled:opacity-40 disabled:active:scale-100"
           >
             Previous
           </button>
@@ -208,7 +208,7 @@ export function DataTable<T>({
             type="button"
             onClick={() => setPage(Math.min(pageCount - 1, current + 1))}
             disabled={current >= pageCount - 1}
-            className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-fog disabled:opacity-40 disabled:active:scale-100"
           >
             Next
           </button>

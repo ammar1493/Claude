@@ -32,7 +32,7 @@ const THEMES: Record<
   },
   // White panel on the fog background.
   light: {
-    shell: "bg-white ring-1 ring-hairline",
+    shell: "bg-white",
     title: "text-slate-ink",
     value: "text-navy",
     icon: "text-navy/20",
@@ -40,7 +40,7 @@ const THEMES: Record<
   },
   // White panel with a gold section marker down the leading edge.
   outline: {
-    shell: "bg-white ring-1 ring-hairline border-l-4 border-gold",
+    shell: "bg-white border-l-4 border-gold",
     title: "text-slate-ink",
     value: "text-navy",
     icon: "text-navy/20",
@@ -73,7 +73,13 @@ export function ValueBox({
 }) {
   const t = THEMES[theme];
   return (
-    <div className={`print-block flex flex-col justify-between rounded-lg px-4 py-3 ${t.shell}`}>
+    <div
+      className={`print-block flex flex-col justify-between rounded-lg px-4 py-3 ${
+        // Light panels take the elevation token; navy panels read as raised
+        // against the fog on their own.
+        theme === "light" || theme === "outline" ? "surface-card" : ""
+      } ${t.shell}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={`text-[11px] font-medium uppercase tracking-[0.08em] ${t.title}`}>{title}</p>

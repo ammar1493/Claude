@@ -25,6 +25,7 @@ export function Card({
   className,
   bodyClassName,
   expandable = true,
+  inset,
 }: {
   title?: ReactNode;
   tone?: Tone;
@@ -34,6 +35,12 @@ export function Card({
   bodyClassName?: string;
   /** Full-screen toggle, the equivalent of bslib's `full_screen = TRUE`. */
   expandable?: boolean;
+  /**
+   * 8px body padding instead of 16px, for a card whose children are themselves
+   * rounded surfaces: 8px child + 8px inset = the card's own 16px radius, so
+   * the corners nest concentrically.
+   */
+  inset?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const navy = tone === "navy";
@@ -58,8 +65,8 @@ export function Card({
     <section
       className={
         expanded
-          ? "fixed inset-3 z-50 flex flex-col overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-hairline sm:inset-6"
-          : `print-block flex flex-col overflow-hidden rounded-lg bg-white ring-1 ring-hairline ${className ?? ""}`
+          ? "surface-raised animate-zoom-in fixed inset-3 z-50 flex flex-col overflow-hidden rounded-2xl bg-white sm:inset-6"
+          : `surface-card print-block flex flex-col overflow-hidden rounded-2xl bg-white ${className ?? ""}`
       }
     >
       {title !== undefined && (
@@ -77,8 +84,10 @@ export function Card({
                 onClick={() => setExpanded((e) => !e)}
                 aria-label={expanded ? "Exit full screen" : "Expand to full screen"}
                 title={expanded ? "Exit full screen (Esc)" : "Expand to full screen"}
-                className={`no-print rounded p-1 transition ${
-                  navy ? "text-white/70 hover:bg-white/15 hover:text-white" : "text-slate-ink hover:bg-navy-050 hover:text-navy"
+                className={`no-print rounded-md p-1 transition-[color,background-color,scale] duration-150 ease-out active:scale-[0.96] ${
+                  navy
+                    ? "text-white/70 hover:bg-white/15 hover:text-white"
+                    : "text-slate-ink hover:bg-navy-050 hover:text-navy"
                 }`}
               >
                 <Icon name={expanded ? "collapse" : "expand"} size={16} />
@@ -91,7 +100,7 @@ export function Card({
         className={
           expanded
             ? "flex min-h-0 flex-1 flex-col overflow-auto p-4"
-            : `flex-1 p-4 ${bodyClassName ?? ""}`
+            : `flex-1 ${inset ? "p-2" : "p-4"} ${bodyClassName ?? ""}`
         }
       >
         <CardExpandedContext.Provider value={expanded}>{children}</CardExpandedContext.Provider>
@@ -106,7 +115,7 @@ export function Card({
       {/* Keeps the grid from collapsing while the card is lifted out of flow. */}
       <div className={className} aria-hidden />
       <div
-        className="fixed inset-0 z-40 bg-navy/40"
+        className="animate-fade-in fixed inset-0 z-40 bg-navy/40 backdrop-blur-[2px]"
         onClick={() => setExpanded(false)}
         aria-hidden
       />
@@ -134,7 +143,7 @@ export function Alert({
   } as const;
   return (
     <div
-      className={`flex items-start gap-2 rounded-lg border-l-4 bg-white px-4 py-3 text-sm text-slate-ink ring-1 ring-hairline ${rules[tone]}`}
+      className={`surface-card flex items-start gap-2 rounded-xl border-l-4 bg-white px-4 py-3 text-sm text-slate-ink ${rules[tone]}`}
     >
       {icon && <span className="mt-0.5 shrink-0 text-navy">{icon}</span>}
       <div>{children}</div>

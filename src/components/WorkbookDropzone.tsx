@@ -48,7 +48,7 @@ export function WorkbookDropzone({ note }: { note?: string | null }) {
           setDragging(false);
           void accept(e.dataTransfer.files?.[0]);
         }}
-        className={`rounded-lg border-2 border-dashed bg-white px-8 py-12 text-center transition ${
+        className={`stage stage-1 rounded-2xl border-2 border-dashed bg-white px-8 py-12 text-center transition-[border-color,background-color] duration-150 ease-out ${
           dragging ? "border-gold bg-gold-050" : "border-hairline"
         }`}
       >
@@ -77,14 +77,14 @@ export function WorkbookDropzone({ note }: { note?: string | null }) {
             type="button"
             disabled={busy}
             onClick={() => inputRef.current?.click()}
-            className="rounded-md bg-gold px-5 py-2.5 text-sm font-bold text-navy transition hover:brightness-105 disabled:opacity-60"
+            className="rounded-md bg-gold px-5 py-2.5 text-sm font-bold text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:brightness-105 disabled:opacity-60 disabled:active:scale-100"
           >
             {busy ? "Reading workbook…" : "Choose workbook"}
           </button>
           <button
             type="button"
             onClick={() => void refetchDataset()}
-            className="rounded-md border border-hairline px-4 py-2.5 text-sm font-bold text-navy transition hover:bg-fog"
+            className="rounded-md border border-hairline px-4 py-2.5 text-sm font-bold text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-fog"
           >
             Retry server source
           </button>
@@ -93,7 +93,7 @@ export function WorkbookDropzone({ note }: { note?: string | null }) {
         {note && <p className="mt-5 text-xs text-slate-ink">{note}</p>}
       </div>
 
-      <div className="mt-4 rounded-lg border-l-4 border-l-navy bg-white p-4 ring-1 ring-hairline">
+      <div className="surface-card stage stage-2 mt-4 rounded-xl border-l-4 border-l-navy bg-white p-4">
         <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-ink">
           Expected columns
         </p>

@@ -12,6 +12,7 @@ import { fmtInt, fmtNum, pct, round1 } from "@/lib/format";
 import { hbar, headroom, line, rankedColors, vbar } from "@/lib/plots";
 import { chartDf, periodStats, sessionsCount, strategicDf } from "@/lib/selectors";
 import { isWellSharpCourse } from "@/lib/wellsharp";
+import { useFirstPaint } from "@/lib/useFirstPaint";
 import { useDashboard } from "@/state/DashboardContext";
 import { usePeriodTotals, useProjectSeries, useProjectTotals } from "./projectTotals";
 
@@ -65,6 +66,10 @@ export function ExecutiveSummary({
   onProjectScopeChange: (scope: "all" | "period") => void;
 }) {
   const { dataset, filters } = useDashboard();
+  // Staged arrival on the first render that has data; a tab switch must not
+  // replay it, and the server never renders it.
+  const first = useFirstPaint(dataset.status === "ready");
+  const stage = (n: number) => (first ? `stage stage-${n}` : "");
   const rows = dataset.rows;
 
   const ps = useMemo(() => periodStats(rows, filters), [rows, filters]);
@@ -203,7 +208,7 @@ export function ExecutiveSummary({
   return (
     <div className="space-y-6">
       {/* Header card */}
-      <div className="print-block rounded-lg bg-navy px-6 py-7 text-center">
+      <div className={`print-block rounded-2xl bg-navy px-6 py-7 text-center ${stage(1)}`}>
         <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-[2rem]">
           {ps.labelMain}
         </h1>
@@ -215,7 +220,7 @@ export function ExecutiveSummary({
       </div>
 
       {/* Headline KPIs: NEFT Data + Qiddiya + Takamol */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className={`grid gap-4 md:grid-cols-3 ${stage(2)}`}>
         <ValueBox
           title="Total Participants"
           value={fmtInt(totals.participants)}
@@ -260,7 +265,7 @@ export function ExecutiveSummary({
       </div>
 
       {/* WellSharp at a Glance */}
-      <Card title="WellSharp at a Glance" tone="navy">
+      <Card title="WellSharp at a Glance" tone="navy" inset className={stage(3)}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <ValueBox
             title="WellSharp Courses"
@@ -302,6 +307,7 @@ export function ExecutiveSummary({
       <Card
         title="Special Projects — Qiddiya Academy &amp; Takamol"
         tone="navy"
+        className={stage(4)}
         action={
           <div className="flex gap-3 text-[13px] font-normal">
             {(
@@ -519,7 +525,7 @@ export function ExecutiveSummary({
       </Card>
 
       {/* Instructor capacity */}
-      <Card title="Instructor Capacity Overview" tone="marked">
+      <Card title="Instructor Capacity Overview" tone="marked" inset>
         <p className="mb-3 text-xs text-slate-ink">
           Active instructor workload distribution and performance metrics. NEFT Data — Qiddiya
           instructors are counted in teaching days on the Qiddiya Academy tab.

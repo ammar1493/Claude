@@ -171,7 +171,7 @@ export function QualityMetrics() {
           />
         </Card>
 
-        <Card title="Response Mix" tone="marked" className="xl:col-span-5">
+        <Card title="Response Mix" tone="marked" className="xl:col-span-5" inset>
           <p className="mb-2 text-xs text-slate-ink">
             How every response was scored, across all questions.
           </p>
@@ -313,7 +313,7 @@ export function QualityMetrics() {
 
       <SectionTitle>Where to focus</SectionTitle>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="Lowest Overall Scores" tone="marked">
+        <Card title="Lowest Overall Scores" tone="marked" inset>
           <p className="mb-2 text-xs text-slate-ink">
             The weakest question for each is named, so a conversation has a starting point.
           </p>
@@ -352,7 +352,7 @@ export function QualityMetrics() {
           />
         </Card>
 
-        <Card title="Highest Overall Scores" tone="marked">
+        <Card title="Highest Overall Scores" tone="marked" inset>
           <p className="mb-2 text-xs text-slate-ink">Ranked by weighted average across all questions.</p>
           <DataTable
             rows={board.instructors.slice(0, 10)}

@@ -204,7 +204,7 @@ export function Qiddiya() {
                 onClick={() => {
                   void reloadQiddiya().then(() => notify("Reloaded QCTA workbook files."));
                 }}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-navy/5"
+                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-navy/5"
               >
                 <Icon name="refresh" size={15} /> Reload
               </button>
@@ -223,7 +223,7 @@ export function Qiddiya() {
               <button
                 type="button"
                 onClick={() => uploadRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white hover:brightness-110"
+                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-navy ps-3 pe-2.5 py-2 text-sm font-semibold text-white transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:brightness-110"
               >
                 <Icon name="upload" size={15} /> Add file
               </button>
@@ -240,7 +240,7 @@ export function Qiddiya() {
                       type="button"
                       title="Remove this workbook"
                       onClick={() => void removeQiddiyaWorkbook(f)}
-                      className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 hover:bg-red-50 hover:text-red-600"
+                      className="mr-1 rounded bg-fog px-1.5 py-0.5 transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] hover:bg-red-50 hover:text-red-600"
                     >
                       {f} ×
                     </button>
@@ -486,7 +486,7 @@ export function Qiddiya() {
         </Card>
       </div>
 
-      <Card title="Session Detail (from workbook)" tone="navy">
+      <Card title="Session Detail (from workbook)" tone="navy" inset>
         <DataTable
           rows={[...sessions].sort(
             (a, b) => a.date.getTime() - b.date.getTime() || a.class.localeCompare(b.class),
