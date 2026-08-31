@@ -101,24 +101,38 @@ server-side so the request stays same-origin.
 
 ## Deploying to Vercel
 
-The app lives on the `claude/r-app-dashboard-vercel-nclum7` branch; `main` holds
-only the original brand GIFs. Vercel builds **Production from the repository's
-production branch**, so that branch has to be set explicitly or the production
-deployment will build a repo with no `package.json`.
+`main` is the production branch and carries the app. Vercel builds it on every
+push, so shipping a change is a push to `main` — there is no manual deploy step.
+
+Work is committed on `claude/r-app-dashboard-vercel-nclum7` and `main` is then
+fast-forwarded to it:
+
+```bash
+git push -u origin claude/r-app-dashboard-vercel-nclum7
+git push origin origin/claude/r-app-dashboard-vercel-nclum7:main
+```
+
+The two refs stay identical, so the fast-forward never produces a merge commit.
+Check it is one before pushing:
+
+```bash
+git merge-base --is-ancestor origin/main origin/claude/r-app-dashboard-vercel-nclum7
+```
+
+### First-time project setup
 
 1. Go to [vercel.com/new](https://vercel.com/new) and import `ammar1493/Claude`.
 2. Leave every build setting alone — the Next.js preset is detected, and the
    defaults (`npm run build`, output `.next`) are correct. Node 20.9+ is
    required and pinned in `package.json`.
-3. Deploy. The first deployment is a preview.
-4. Open **Settings → Git → Production Branch**, change it from `main` to
-   `claude/r-app-dashboard-vercel-nclum7`, and save.
-5. Redeploy from the **Deployments** tab (⋯ → Redeploy) so the production URL
-   picks up that branch. Every later push to it deploys automatically.
+3. Deploy. Production Branch stays `main`.
 
 Environment variables are optional — see `.env.example`. Set them under
 **Settings → Environment Variables** only if the workbook should come from a URL
 instead of being uploaded in the browser.
+
+The footer of every page shows the deploy's short commit hash, so a page can be
+matched to a commit when a number looks wrong.
 
 ### Verifying the deployment
 
