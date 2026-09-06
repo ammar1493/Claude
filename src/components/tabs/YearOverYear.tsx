@@ -12,7 +12,7 @@ import { floorMonth, fmtMonthShort } from "@/lib/dates";
 import { headroom, vbar } from "@/lib/plots";
 import { fmtInt } from "@/lib/format";
 import { useDashboard } from "@/state/DashboardContext";
-import { projectGrandTotals, useProjectYears } from "./projectYears";
+import { projectGrandTotals, useProjectMonths, useProjectYears } from "./projectYears";
 
 /** Percentage change in NEFT participants against the previous year. */
 function yearChange(
@@ -73,6 +73,7 @@ export function YearOverYear() {
     const year = Number(filters.year);
     if (year === 2023) {
       return MANUAL_2023.map((m) => ({
+        monthNum: m.monthNum,
         label: fmtMonthShort(new Date(m.year, m.monthNum - 1, 1)),
         participants: m.participants,
         sessions: null as number | null,
@@ -89,10 +90,16 @@ export function YearOverYear() {
         sessions: nDistinct(rs.map((r) => r.actualSession)) as number | null,
       }))
       .sort((a, b) => a.month.getTime() - b.month.getTime())
-      .map((m) => ({ label: fmtMonthShort(m.month), participants: m.participants, sessions: m.sessions }));
+      .map((m) => ({
+        monthNum: m.month.getMonth() + 1,
+        label: fmtMonthShort(m.month),
+        participants: m.participants,
+        sessions: m.sessions,
+      }));
   }, [rows, filters.year]);
 
   const monthlySessions = monthly.filter((m) => m.sessions !== null) as {
+    monthNum: number;
     label: string;
     participants: number;
     sessions: number;
@@ -130,6 +137,40 @@ export function YearOverYear() {
       };
     });
   }, [yearly, projectYears]);
+
+  /**
+   * The same union for the Monthly Analysis section, within the selected year.
+   * A month a project ran but the core data did not (or the reverse) still gets
+   * a column.
+   */
+  const projectMonths = useProjectMonths(Number(filters.year));
+
+  const combinedMonths = useMemo(() => {
+    const nums = [
+      ...new Set([...monthly.map((m) => m.monthNum), ...projectMonths.map((m) => m.monthNum)]),
+    ].sort((a, b) => a - b);
+    return nums.map((monthNum) => {
+      const core = monthly.find((m) => m.monthNum === monthNum);
+      const proj = projectMonths.find((m) => m.monthNum === monthNum);
+      const neftParticipants = core?.participants ?? 0;
+      const qdParticipants = proj?.qdParticipants ?? 0;
+      const tkParticipants = proj?.tkParticipants ?? 0;
+      return {
+        monthNum,
+        label: fmtMonthShort(new Date(2000, monthNum - 1, 1)),
+        neftParticipants,
+        neftSessions: core?.sessions ?? 0,
+        qdParticipants,
+        qdSessions: proj?.qdSessions ?? 0,
+        tkParticipants,
+        tkSessions: proj?.tkSessions ?? 0,
+        grandParticipants: neftParticipants + qdParticipants + tkParticipants,
+      };
+    });
+  }, [monthly, projectMonths]);
+
+  /** Whether the selected year has any project activity at all. */
+  const monthsHaveProjects = combinedMonths.some((m) => m.qdParticipants + m.tkParticipants > 0);
 
   const projectsEmpty = hasProjects
     ? null
@@ -445,6 +486,7 @@ export function YearOverYear() {
         <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
           <Icon name="filter" size={15} />
           Use the &ldquo;Year for Analysis&rdquo; filter in the sidebar to select which year to view.
+          NEFT Data first, then Qiddiya Academy and Takamol for the same months.
         </p>
       </div>
 
@@ -502,6 +544,192 @@ export function YearOverYear() {
           />
         </Card>
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title={`Qiddiya & Takamol by Month — ${filters.year}`} tone="marked">
+          <p className="mb-2 text-xs text-slate-ink">
+            Drawn on their own scale. Stacked onto NEFT Data they would be too small to read.
+          </p>
+          <Plot
+            height={420}
+            emptyMessage={
+              monthsHaveProjects
+                ? null
+                : `No Qiddiya or Takamol records for ${filters.year} — add a QCTA workbook on the Qiddiya Academy tab, or enter months manually there and on the Takamol tab.`
+            }
+            data={[
+              vbar({
+                labels: combinedMonths.map((m) => m.label),
+                values: combinedMonths.map((m) => m.qdParticipants),
+                text: sparseLabels(combinedMonths.map((m) => m.qdParticipants)),
+                color: NEFT_TEAL,
+                name: "Qiddiya Academy",
+                textSize: 12,
+                hovertemplate: "<b>%{x}</b><br>Qiddiya participants: %{y:,}<extra></extra>",
+              }),
+              vbar({
+                labels: combinedMonths.map((m) => m.label),
+                values: combinedMonths.map((m) => m.tkParticipants),
+                text: sparseLabels(combinedMonths.map((m) => m.tkParticipants)),
+                color: NEFT_GREEN,
+                name: "Takamol",
+                textSize: 12,
+                hovertemplate: "<b>%{x}</b><br>Takamol participants: %{y:,}<extra></extra>",
+              }),
+            ]}
+            layout={{
+              barmode: "group",
+              xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
+              yaxis: {
+                title: { text: "Participants" },
+                tickformat: ",",
+                range: headroom(
+                  combinedMonths.flatMap((m) => [m.qdParticipants, m.tkParticipants]),
+                  1.25,
+                ),
+              },
+              legend: { orientation: "h", x: 0, y: 1.1, font: { size: 11 } },
+              margin: { l: 80, r: 50, t: 55, b: 50 },
+              showlegend: true,
+            }}
+          />
+        </Card>
+
+        <Card title={`Grand Total Participants by Month — ${filters.year}`} tone="navy">
+          <p className="mb-2 text-xs text-slate-ink">
+            NEFT Data, Qiddiya Academy and Takamol stacked into one figure per month.
+          </p>
+          <Plot
+            height={420}
+            emptyMessage={combinedMonths.length ? null : `No records for ${filters.year}`}
+            data={[
+              vbar({
+                labels: combinedMonths.map((m) => m.label),
+                values: combinedMonths.map((m) => m.neftParticipants),
+                color: NEFT_NAVY,
+                name: "NEFT Data",
+                text: [],
+                hovertemplate: "<b>%{x}</b><br>NEFT Data: %{y:,}<extra></extra>",
+              }),
+              vbar({
+                labels: combinedMonths.map((m) => m.label),
+                values: combinedMonths.map((m) => m.qdParticipants),
+                color: NEFT_TEAL,
+                name: "Qiddiya Academy",
+                text: [],
+                hovertemplate: "<b>%{x}</b><br>Qiddiya: %{y:,}<extra></extra>",
+              }),
+              vbar({
+                labels: combinedMonths.map((m) => m.label),
+                values: combinedMonths.map((m) => m.tkParticipants),
+                color: NEFT_GREEN,
+                name: "Takamol",
+                text: [],
+                hovertemplate: "<b>%{x}</b><br>Takamol: %{y:,}<extra></extra>",
+              }),
+              // A transparent trace carries the stack total as an outside label.
+              {
+                type: "scatter",
+                mode: "text",
+                x: combinedMonths.map((m) => m.label),
+                y: combinedMonths.map((m) => m.grandParticipants),
+                text: combinedMonths.map((m) => fmtInt(m.grandParticipants)),
+                textposition: "top center",
+                textfont: { size: 12, color: NEFT_NAVY },
+                showlegend: false,
+                hoverinfo: "skip",
+              },
+            ]}
+            layout={{
+              barmode: "stack",
+              xaxis: { title: { text: "" }, type: "category", tickangle: 0 },
+              yaxis: {
+                title: { text: "Participants" },
+                tickformat: ",",
+                range: headroom(combinedMonths.map((m) => m.grandParticipants), 1.2),
+              },
+              legend: { orientation: "h", x: 0, y: 1.1, font: { size: 11 } },
+              margin: { l: 80, r: 50, t: 55, b: 50 },
+              showlegend: true,
+            }}
+          />
+        </Card>
+      </div>
+
+      <Card title={`Month Totals — ${filters.year}`} tone="navy" inset>
+        <p className="mb-3 text-xs text-slate-ink">
+          The same figures as the charts above, exactly. Sessions read &ldquo;—&rdquo; where none were
+          recorded{filters.year === "2023" && ", as 2023 predates the session data"}.
+        </p>
+        <DataTable
+          rows={combinedMonths}
+          pageLength={12}
+          dense
+          emptyMessage={`No records for ${filters.year}`}
+          columns={[
+            {
+              key: "m",
+              header: "Month",
+              value: (r) => r.monthNum,
+              render: (r) => <span className="font-bold text-navy">{r.label}</span>,
+            },
+            {
+              key: "n",
+              header: "NEFT Participants",
+              value: (r) => r.neftParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="font-semibold tabular-nums">{fmtInt(r.neftParticipants)}</span>
+              ),
+            },
+            {
+              key: "s",
+              header: "NEFT Sessions",
+              value: (r) => r.neftSessions,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.neftSessions ? fmtInt(r.neftSessions) : "—"}</span>
+              ),
+            },
+            {
+              key: "q",
+              header: "Qiddiya",
+              value: (r) => r.qdParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.qdParticipants ? fmtInt(r.qdParticipants) : "—"}</span>
+              ),
+            },
+            {
+              key: "qs",
+              header: "Qiddiya Sessions",
+              value: (r) => r.qdSessions,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.qdSessions ? fmtInt(r.qdSessions) : "—"}</span>
+              ),
+            },
+            {
+              key: "t",
+              header: "Takamol",
+              value: (r) => r.tkParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{r.tkParticipants ? fmtInt(r.tkParticipants) : "—"}</span>
+              ),
+            },
+            {
+              key: "g",
+              header: "Grand Total",
+              value: (r) => r.grandParticipants,
+              align: "right",
+              render: (r) => (
+                <span className="font-bold tabular-nums text-navy">{fmtInt(r.grandParticipants)}</span>
+              ),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }

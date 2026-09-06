@@ -76,3 +76,63 @@ export function projectGrandTotals(rows: ProjectYear[]) {
     tkSessions: sumBy(rows, (r) => r.tkSessions),
   };
 }
+
+export interface ProjectMonth {
+  /** 1–12. */
+  monthNum: number;
+  qdParticipants: number;
+  qdSessions: number;
+  qdDays: number;
+  tkParticipants: number;
+  tkSessions: number;
+}
+
+/**
+ * The same Qiddiya and Takamol figures broken down by month within one year,
+ * for the Monthly Analysis section.
+ *
+ * Only months with activity come back; the caller lines them up against the
+ * core months it already has. Like the yearly view, this ignores the sidebar
+ * date range — the projects answer to the "Year for Analysis" filter alone.
+ */
+export function useProjectMonths(year: number): ProjectMonth[] {
+  const { qiddiya, qdManual, tkManual } = useDashboard();
+
+  return useMemo(() => {
+    const byMonth = new Map<number, ProjectMonth>();
+    const at = (monthNum: number): ProjectMonth => {
+      let hit = byMonth.get(monthNum);
+      if (!hit) {
+        hit = { monthNum, qdParticipants: 0, qdSessions: 0, qdDays: 0, tkParticipants: 0, tkSessions: 0 };
+        byMonth.set(monthNum, hit);
+      }
+      return hit;
+    };
+
+    for (const s of qiddiya?.sessions ?? []) {
+      if (s.date.getFullYear() !== year) continue;
+      const m = at(s.date.getMonth() + 1);
+      m.qdParticipants += s.students;
+      m.qdSessions += 1;
+    }
+    for (const d of qiddiya?.days ?? []) {
+      if (d.date.getFullYear() !== year) continue;
+      at(d.date.getMonth() + 1).qdDays += 1;
+    }
+    for (const e of withDates(qdManual)) {
+      if (e.year !== year) continue;
+      const m = at(e.month);
+      m.qdParticipants += e.participants;
+      m.qdSessions += e.sessions;
+      m.qdDays += e.teachingDays;
+    }
+    for (const e of withDates(tkManual)) {
+      if (e.year !== year) continue;
+      const m = at(e.month);
+      m.tkParticipants += e.participants;
+      m.tkSessions += e.sessions;
+    }
+
+    return [...byMonth.values()].sort((a, b) => a.monthNum - b.monthNum);
+  }, [qiddiya, qdManual, tkManual, year]);
+}
