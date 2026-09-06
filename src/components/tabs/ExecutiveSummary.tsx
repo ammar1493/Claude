@@ -58,6 +58,36 @@ function SourceSplit({
   );
 }
 
+/**
+ * The same split for an average. Averages do not add, so these are separated
+ * by a middot rather than the "+" the count splits use.
+ */
+function AvgSplit({
+  neft,
+  qd,
+  tk,
+  show,
+}: {
+  neft: number | null;
+  qd: number | null;
+  tk: number | null;
+  show: boolean;
+}) {
+  // One decimal on every figure, so the three read as one comparable row —
+  // fmtNum() drops a trailing ".0", which reads as a different precision here.
+  const one = (n: number) =>
+    n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const parts = [
+    neft === null ? null : `NEFT ${one(neft)}`,
+    qd === null ? null : `Qiddiya ${one(qd)}`,
+    tk === null ? null : `Takamol ${one(tk)}`,
+  ].filter(Boolean);
+  if (!show || parts.length < 2) return null;
+  return (
+    <span className="block text-[11px] font-normal opacity-80">{parts.join(" · ")}</span>
+  );
+}
+
 export function ExecutiveSummary({
   projectScope,
   onProjectScopeChange,
@@ -260,7 +290,17 @@ export function ExecutiveSummary({
           value={avgClassSize === null ? "N/A" : fmtNum(avgClassSize)}
           showcase={<Icon name="speedometer" size={34} />}
           theme="light"
-          footer={<span className="text-slate-ink">Participants per session, all sources</span>}
+          footer={
+            <div className="space-y-0.5 text-slate-ink">
+              <span className="block">Participants per session, all sources</span>
+              <AvgSplit
+                neft={totals.avgClassSizeBySource.neft}
+                qd={totals.avgClassSizeBySource.qd}
+                tk={totals.avgClassSizeBySource.tk}
+                show={totals.hasProjects}
+              />
+            </div>
+          }
         />
       </div>
 

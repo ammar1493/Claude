@@ -131,6 +131,9 @@ export function usePeriodTotals(ps: PeriodStats) {
     const participants = neftCurParticipants + cur.participants;
     const sessions = neftCurSessions + cur.sessions;
 
+    /** Participants per session, to one decimal; null where nothing ran. */
+    const avg = (p: number, s: number) => (s ? Math.round((p / s) * 10) / 10 : null);
+
     return {
       split: cur,
       neftParticipants: neftCurParticipants,
@@ -139,7 +142,17 @@ export function usePeriodTotals(ps: PeriodStats) {
       sessions,
       prevParticipants: neftPrevParticipants + prev.participants,
       prevSessions: neftPrevSessions + prev.sessions,
-      avgClassSize: sessions ? Math.round((participants / sessions) * 10) / 10 : null,
+      avgClassSize: avg(participants, sessions),
+      /**
+       * The same average per source. Averages do not add, so the combined
+       * figure above is recomputed from the pooled totals rather than being an
+       * average of these three.
+       */
+      avgClassSizeBySource: {
+        neft: avg(neftCurParticipants, neftCurSessions),
+        qd: avg(cur.qdParticipants, cur.qdSessions),
+        tk: avg(cur.tkParticipants, cur.tkSessions),
+      },
       hasProjects: cur.participants + cur.sessions > 0,
     };
   }, [ps, qiddiya, qdManual, tkManual]);
