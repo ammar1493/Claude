@@ -42,6 +42,14 @@ row numbers, and dates, names, session numbers and durations all arrive in
 several spellings. Before changing a parsing rule, check it against every sheet
 in a month rather than the one that prompted the change.
 
+Two facts live outside the files and are entered by the office — how far each
+site is from the centre, and the signed timecards for work that issues no
+certificates. Both are kept in IndexedDB and reused every month. Never infer
+either: a site without a distance is reported as unpriced, and a timecard that
+contradicts the record sheet is reported as a conflict. Note also that the
+record sheet's `RigNo` is the *trainee's* rig, not where the course ran, so it
+never decides a rate band — `Location` does.
+
 ## Charts
 
 Chart label collisions are checked by measuring intersecting text bounding boxes

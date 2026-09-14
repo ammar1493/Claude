@@ -5,16 +5,31 @@ import { BRAND } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
 import { downloadFindingsWorkbook } from "@/lib/incentives/export";
 import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
+import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
 import { parseIncentiveSheet } from "@/lib/incentives/timesheet";
-import type { SheetReport } from "@/lib/incentives/types";
+import type { IncentiveSheet, SiteDistance, SheetReport, Timecard } from "@/lib/incentives/types";
 import { verifySheet } from "@/lib/incentives/verify";
 import { baseName, readZip, spreadsheetEntries } from "@/lib/incentives/zip";
-import { deleteWorkbook, getWorkbook, listWorkbooks, putWorkbook } from "@/lib/storage";
+import {
+  deleteWorkbook,
+  getSetting,
+  getWorkbook,
+  listWorkbooks,
+  putSetting,
+  putWorkbook,
+} from "@/lib/storage";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
 import { FileSlot } from "./FileSlot";
 import { SEVERITY } from "./severity";
 import { SheetReportView } from "./SheetReportView";
+import { SitesPanel } from "./SitesPanel";
+import { TimecardsPanel } from "./TimecardsPanel";
+
+/** Tab ids for the two reference views, alongside the per-trainer indices. */
+const ALL_SHEETS = -1;
+const SITES_TAB = -2;
+const TIMECARDS_TAB = -3;
 
 interface StoredFile {
   name: string;
@@ -33,8 +48,10 @@ export function IncentiveVerifier() {
   const [sheets, setSheets] = useState<StoredFile[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [active, setActive] = useState<number>(-1);
+  const [active, setActive] = useState<number>(ALL_SHEETS);
   const [restored, setRestored] = useState(false);
+  const [sites, setSites] = useState<SiteDistance[]>([]);
+  const [timecards, setTimecards] = useState<Timecard[]>([]);
 
   /* The three workbooks stay in the browser between visits — the record sheet
      and the course list barely change month to month, and re-uploading them to
@@ -42,12 +59,16 @@ export function IncentiveVerifier() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [rec, cou, all] = await Promise.all([
+      const [rec, cou, all, savedSites, savedCards] = await Promise.all([
         getWorkbook("record"),
         getWorkbook("courses"),
         listWorkbooks("incentive"),
+        getSetting<SiteDistance[]>("incentive:sites"),
+        getSetting<Timecard[]>("incentive:timecards"),
       ]);
       if (cancelled) return;
+      if (savedSites?.length) setSites(savedSites);
+      if (savedCards?.length) setTimecards(savedCards);
       if (rec) setRecord({ name: rec.name, data: rec.data });
       if (cou) setCourses({ name: cou.name, data: cou.data });
       if (all.length) {
@@ -82,28 +103,90 @@ export function IncentiveVerifier() {
     }
   }, [courses]);
 
-  const results = useMemo<{ reports: SheetReport[]; failures: { name: string; message: string }[] }>(() => {
-    const rec = parsedRecord.value;
-    const cat = parsedCourses.value;
-    if (!rec || !cat) return { reports: [], failures: [] };
-    const reports: SheetReport[] = [];
+  /* Parsing is the expensive half, and it does not depend on the distance
+     table — so it is memoised on the files alone and re-verifying after an
+     edit to a site costs nothing but the rules. */
+  const parsedSheets = useMemo(() => {
+    const parsed: IncentiveSheet[] = [];
     const failures: { name: string; message: string }[] = [];
     for (const file of sheets) {
       try {
-        reports.push(verifySheet(parseIncentiveSheet(file.name, file.data), rec, cat));
+        parsed.push(parseIncentiveSheet(file.name, file.data));
       } catch (e) {
         failures.push({ name: file.name, message: (e as Error).message });
       }
     }
-    reports.sort((a, b) =>
+    return { parsed, failures };
+  }, [sheets]);
+
+  const siteUsage = useMemo(
+    () => (parsedRecord.value ? collectSites(parsedRecord.value.rows, parsedSheets.parsed) : []),
+    [parsedRecord.value, parsedSheets.parsed],
+  );
+
+  /* Sites seen this month that the table has never heard of are folded in with
+     no distance, so they show up asking for one rather than silently missing. */
+  useEffect(() => {
+    if (!siteUsage.length) return;
+    setSites((prev) => {
+      const merged = mergeSites(prev, siteUsage);
+      return merged.length === prev.length ? prev : merged;
+    });
+  }, [siteUsage]);
+
+  const siteTable = useMemo(() => new SiteTable(sites), [sites]);
+
+  const reports = useMemo<SheetReport[]>(() => {
+    const rec = parsedRecord.value;
+    const cat = parsedCourses.value;
+    if (!rec || !cat) return [];
+    const out = parsedSheets.parsed.map((sheet) =>
+      verifySheet(sheet, rec, cat, { sites: siteTable, timecards }),
+    );
+    out.sort((a, b) =>
       (a.matchedInstructor ?? a.sheet.instructorName).localeCompare(
         b.matchedInstructor ?? b.sheet.instructorName,
       ),
     );
-    return { reports, failures };
-  }, [sheets, parsedRecord.value, parsedCourses.value]);
+    return out;
+  }, [parsedSheets.parsed, parsedRecord.value, parsedCourses.value, siteTable, timecards]);
 
-  const { reports, failures } = results;
+  const failures = parsedSheets.failures;
+
+  const unpricedSites = useMemo(
+    () => siteUsage.filter((u) => bandForSite(sites.find((s) => siteKey(s.name) === u.key)) === null),
+    [siteUsage, sites],
+  );
+
+  const saveSites = useCallback((next: SiteDistance[]) => {
+    setSites(next);
+    void putSetting("incentive:sites", next);
+  }, []);
+
+  const saveTimecards = useCallback((next: Timecard[]) => {
+    setTimecards(next);
+    void putSetting("incentive:timecards", next);
+  }, []);
+
+  const attachToTimecard = useCallback(async (card: Timecard, file: File) => {
+    await putWorkbook({
+      id: `timecard:${card.id}`,
+      name: file.name,
+      kind: "attachment",
+      savedAt: Date.now(),
+      data: await file.arrayBuffer(),
+    });
+  }, []);
+
+  const openAttachment = useCallback(async (card: Timecard) => {
+    const stored = await getWorkbook(`timecard:${card.id}`);
+    if (!stored) return;
+    // Blob URLs are revoked on the next tick by some browsers if released
+    // immediately, so the handle is kept until the tab that opened it is gone.
+    const url = URL.createObjectURL(new Blob([stored.data]));
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, []);
 
   const acceptReference = useCallback(
     async (kind: "record" | "courses", files: File[]) => {
@@ -223,7 +306,7 @@ export function IncentiveVerifier() {
               <>
                 <button
                   type="button"
-                  onClick={() => downloadFindingsWorkbook(reports, monthLabel || "report")}
+                  onClick={() => downloadFindingsWorkbook(reports, monthLabel || "report", { sites, timecards })}
                   className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-bold text-navy transition-[filter,scale] duration-150 ease-out hover:brightness-105 active:scale-[0.96]"
                 >
                   <Icon name="download" size={14} />
@@ -365,14 +448,55 @@ export function IncentiveVerifier() {
             <nav className="no-print flex flex-wrap gap-1.5">
               <button
                 type="button"
-                onClick={() => setActive(-1)}
-                aria-current={active === -1 ? "page" : undefined}
+                onClick={() => setActive(ALL_SHEETS)}
+                aria-current={active === ALL_SHEETS ? "page" : undefined}
                 className={`rounded-md px-3 py-1.5 text-[13px] font-bold transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === -1 ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                  active === ALL_SHEETS ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
                 All {reports.length} sheets
               </button>
+              <button
+                type="button"
+                onClick={() => setActive(SITES_TAB)}
+                aria-current={active === SITES_TAB ? "page" : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
+                  active === SITES_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                }`}
+              >
+                <Icon name="building" size={14} />
+                Sites &amp; distances
+                {unpricedSites.length > 0 && (
+                  <span
+                    className={`rounded px-1 text-[10px] font-bold ${
+                      active === SITES_TAB ? "bg-white/20 text-white" : SEVERITY.warning.chip
+                    }`}
+                  >
+                    {unpricedSites.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActive(TIMECARDS_TAB)}
+                aria-current={active === TIMECARDS_TAB ? "page" : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
+                  active === TIMECARDS_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                }`}
+              >
+                <Icon name="calendar-check" size={14} />
+                Timecards
+                {timecards.length > 0 && (
+                  <span
+                    className={`rounded px-1 text-[10px] font-bold ${
+                      active === TIMECARDS_TAB ? "bg-white/20 text-white" : "bg-navy-050 text-navy"
+                    }`}
+                  >
+                    {timecards.length}
+                  </span>
+                )}
+              </button>
+              <span aria-hidden className="mx-1 w-px self-stretch bg-hairline" />
               {reports.map((r, i) => (
                 <button
                   key={r.sheet.fileName}
@@ -397,15 +521,30 @@ export function IncentiveVerifier() {
               ))}
             </nav>
 
-            {active === -1 ? (
+            {active === ALL_SHEETS && (
               <SummaryTable
                 reports={reports}
                 totals={totals}
                 monthLabel={monthLabel}
+                unpricedSites={unpricedSites.length}
                 onOpen={setActive}
+                onOpenSites={() => setActive(SITES_TAB)}
                 onRemove={(name) => void removeSheet(name)}
               />
-            ) : (
+            )}
+            {active === SITES_TAB && (
+              <SitesPanel usage={siteUsage} sites={sites} onChange={saveSites} />
+            )}
+            {active === TIMECARDS_TAB && (
+              <TimecardsPanel
+                timecards={timecards}
+                onChange={saveTimecards}
+                onAttach={attachToTimecard}
+                onOpenAttachment={(card) => void openAttachment(card)}
+                instructors={parsedRecord.value?.instructors ?? []}
+              />
+            )}
+            {active >= 0 && reports[active] && (
               <SheetReportView key={reports[active].sheet.fileName} report={reports[active]} />
             )}
           </>
@@ -419,18 +558,39 @@ function SummaryTable({
   reports,
   totals,
   monthLabel,
+  unpricedSites,
   onOpen,
+  onOpenSites,
   onRemove,
 }: {
   reports: SheetReport[];
   totals: { claimed: number; verified: number; errors: number; warnings: number };
   monthLabel: string;
+  unpricedSites: number;
   onOpen: (index: number) => void;
+  onOpenSites: () => void;
   onRemove: (name: string) => void;
 }) {
   const difference = totals.verified - totals.claimed;
   return (
     <div className="space-y-4">
+      {unpricedSites > 0 && (
+        <div className="surface-card flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink">
+          <Icon name="warning" size={16} className="shrink-0 text-gold" />
+          <span className="min-w-0 flex-1">
+            {unpricedSites} location{unpricedSites === 1 ? "" : "s"} in this month{"’"}s sheets{" "}
+            {unpricedSites === 1 ? "has" : "have"} no distance set, so the days spent there cannot be
+            priced against a rate band yet.
+          </span>
+          <button
+            type="button"
+            onClick={onOpenSites}
+            className="no-print rounded-md bg-gold px-3 py-1.5 text-xs font-bold text-navy transition-[filter,scale] duration-150 ease-out hover:brightness-105 active:scale-[0.96]"
+          >
+            Set the distances
+          </button>
+        </div>
+      )}
       <div className="stage stage-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Sheets checked", value: String(reports.length), tone: "text-navy" },

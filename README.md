@@ -34,6 +34,14 @@ the browser:
 | Courses Duration | `Course Name` / `Duration`, where duration is `Half Day`, `1 Full Day` or `N Days`. |
 | Incentive sheets | The trainers' workbooks — a `.zip` of them, or the `.xlsx` files. Each has a claim grid (rate lines down, days of the month across) and a verification log (one line per session). |
 
+Two reference tables fill the gaps those three leave, and both are kept between
+visits so they only get built once:
+
+| Table | What it settles |
+| --- | --- |
+| **Sites & distances** | Every place name the month mentions. Anything that is not the NEFT centre is an outbound course, and the scheme pays outbound by distance — so the office types the kilometres in once per site, or marks it a rig or well, which takes the top band whatever the distance. |
+| **Timecards** | Rig competency assessment issues no certificates, so the record sheet has nothing for it. The client-signed timecard is the evidence instead: assessor, unit, dates, days, with the scan attached. |
+
 Each claimed day is priced against the sessions that instructor delivered that
 day, and the report names the cell, says why it has to change, and what it
 should say instead. The rules live in `src/lib/incentives/verify.ts`; the
@@ -49,10 +57,21 @@ interesting ones are:
   session numbering jumps; `groupSessionsIntoBlocks()` carries the reasoning.
 - **Multi-day courses issue their certificates on day one**, so a `4 Days`
   course starting on the 16th makes the 17th, 18th and 19th teaching days too.
+- **The band is arithmetic once a site has a distance**, so a rate-band
+  correction is priced from the sheet's own table: a day at a site 18 km away
+  claimed at the over-350 km rate comes back with the right line and the
+  difference in riyals. A site with no distance yet is reported as exactly that
+  rather than guessed at, and the summary says how many are outstanding.
 - **The distance bands have no half-day line**, so a half-day course at a rig
-  still books the whole day there. Those days are reported as notes, never as
-  over-claims; what *is* an error is a distance rate on a day the record sheet
-  puts at the NEFT centre.
+  still books the whole day there. Those days are a note, not an over-claim —
+  unless the band itself is wrong, in which case the band correction carries
+  the day and the note stays quiet, so the same riyals are never subtracted
+  twice.
+- **A signed timecard buys the whole day.** Its days stop reading as
+  unsupported, at the band its unit sits in. When the record sheet *also* shows
+  teaching on a day a card covers, that is reported as a conflict and left
+  unpriced — the trainer cannot be on a rig and in the classroom, and which
+  record is wrong is not something the files can settle.
 - **Short-hand course names are not guessed at.** "first aid" matches five
   courses in the list, one of them a full day, so the line is reported as
   ambiguous rather than valued.
@@ -67,13 +86,22 @@ the verified total; the card says how many are still open.
 
 **Getting it out.** The claim grid on screen is the report — a coloured tick is
 a finding, and selecting it opens the wording to send back to the trainer.
-**Findings workbook** downloads Summary / Findings / Day-by-day sheets (values
-only: the community build of SheetJS cannot write cell fills, so the
-highlighting stays in the app and on **Print**).
+**Findings workbook** downloads Summary / Findings / Day-by-day / Sites /
+Timecards sheets (values only: the community build of SheetJS cannot write cell
+fills, so the highlighting stays in the app and on **Print**). The two
+reference tables travel with the report because a verified figure is only as
+good as the distance it was priced at.
 
-The three workbooks are kept in IndexedDB, so the record sheet and course list
-survive a reload and only the trainers' sheets change month to month. Nothing
-is sent to a server.
+The three workbooks, both reference tables and the timecard scans are kept in
+IndexedDB, so the record sheet, the course list and the distances survive a
+reload and only the trainers' sheets change month to month. Nothing is sent to
+a server.
+
+**Timecards are typed in, not read.** The cards come back as signed scans with
+no text layer — a photograph of a table — so the six fields are entered by hand
+and the scan is attached beside them. Reading dates off a photograph is not the
+kind of evidence a payment should rest on; if your cards arrive with a text
+layer, parsing them to pre-fill the form is the obvious next step.
 
 ## Brand system
 

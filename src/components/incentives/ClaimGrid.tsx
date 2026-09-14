@@ -48,15 +48,6 @@ export function ClaimGrid({
         findings: report.findings.filter((f) => d.findingIds.includes(f.id)),
       });
     }
-    // Days delivered but never claimed have no claim row, so they only exist
-    // as a finding; mark their column so the gap is visible in the grid.
-    for (const f of report.findings) {
-      if (f.code !== "not-claimed" || !f.date) continue;
-      const day = f.date.getDate();
-      const existing = map.get(day);
-      if (existing) existing.findings.push(f);
-      else map.set(day, { claimed: 0, record: 0, findings: [f] });
-    }
     return map;
   }, [report.days, report.findings]);
 

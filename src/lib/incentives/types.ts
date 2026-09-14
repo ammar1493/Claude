@@ -64,6 +64,13 @@ export interface TeachingBlock {
   spanDays: number;
 }
 
+/** A timecard day: evidence for a date that issues no certificates. */
+export interface TimecardCover {
+  timecard: Timecard;
+  /** Days on the card, for the stated-total check. */
+  spanDays: number;
+}
+
 /** What the Record Sheet says one instructor did on one date. */
 export interface RecordDay {
   /** ISO yyyy-mm-dd, the key everything joins on. */
@@ -81,7 +88,62 @@ export interface RecordDay {
   locations: string[];
 }
 
+/** Everything backing one instructor-day, whichever source it came from. */
+export interface DayEvidence {
+  record: RecordDay | null;
+  covers: TimecardCover[];
+  /** Place names in play that day, from the record sheet and any timecard. */
+  sites: string[];
+}
+
 export type ClaimSection = "near" | "mid" | "far" | "perdiem" | "admin";
+
+/**
+ * What a training site is, for the rate band.
+ *
+ * "centre" is the NEFT facility; "site" is anywhere else, priced on its
+ * kilometres; "rig" is a rig or well, which the scheme pays at the top band
+ * whatever the distance. "unknown" is a site the office has not classified —
+ * the verifier reports those rather than guessing a band.
+ */
+export type SiteKind = "centre" | "site" | "rig" | "unknown";
+
+export interface SiteDistance {
+  /** The place name as the record sheet writes it. */
+  name: string;
+  kind: SiteKind;
+  /** Road distance from the NEFT centre, null until the office sets it. */
+  km: number | null;
+  note: string;
+}
+
+/**
+ * A signed assessor timecard.
+ *
+ * Competency assessment on a rig issues no certificates, so the record sheet
+ * has nothing to show for it and the days would read as unsupported. The
+ * timecard is the evidence instead: a client-signed card naming the assessor,
+ * the unit, and the dates worked.
+ */
+export interface Timecard {
+  id: string;
+  /** Assessor as the card names them; matched to an instructor by name. */
+  assessor: string;
+  provider: string;
+  /** The rig, vessel or place the card is for — "ADM-687", "Report Writing". */
+  unit: string;
+  activity: string;
+  /** ISO yyyy-mm-dd. */
+  start: string;
+  end: string;
+  /** Days as the card itself states them, for checking against the span. */
+  totalDays: number | null;
+  kind: SiteKind;
+  km: number | null;
+  /** File name of the scanned card kept alongside, for the audit trail. */
+  attachmentName: string | null;
+  note: string;
+}
 
 export type ClaimKind =
   | "halfAM"
@@ -208,5 +270,10 @@ export interface DayReport {
   rawRecordDays: number;
   claims: { row: ClaimRow; cell: string }[];
   record: RecordDay | null;
+  /** Timecards covering this date, when a client signed for the day. */
+  covers: TimecardCover[];
+  /** The band the evidence puts this day in, null while a site is unpriced. */
+  expectedBand: ClaimSection | null;
+  sites: string[];
   findingIds: string[];
 }

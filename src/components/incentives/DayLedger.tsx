@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { KIND_LABELS } from "@/lib/incentives/timesheet";
-import type { Finding, SheetReport } from "@/lib/incentives/types";
+import { describeTimecard } from "@/lib/incentives/timecards";
+import { KIND_LABELS, SECTION_LABELS } from "@/lib/incentives/timesheet";
+import type { ClaimSection, Finding, SheetReport, TimecardCover } from "@/lib/incentives/types";
+import { Icon } from "../Icons";
 import { SEVERITY, worstSeverity } from "./severity";
 
 const fmtDays = (n: number) => (n === 0 ? "—" : n === 0.5 ? "½" : String(n));
@@ -25,10 +27,18 @@ export function DayLedger({
   onSelect: (finding: Finding) => void;
 }) {
   const rows = useMemo(() => {
-    const byKey = new Map<
-      string,
-      { date: Date; claimed: number; sar: number; lines: string[]; findings: Finding[]; record: SheetReport["days"][number]["record"] }
-    >();
+    interface Row {
+      date: Date;
+      claimed: number;
+      sar: number;
+      lines: string[];
+      findings: Finding[];
+      record: SheetReport["days"][number]["record"];
+      covers: TimecardCover[];
+      sites: string[];
+      band: ClaimSection | null;
+    }
+    const byKey = new Map<string, Row>();
     for (const d of report.days) {
       byKey.set(d.key, {
         date: d.date,
@@ -37,14 +47,14 @@ export function DayLedger({
         lines: d.claims.map((c) => `${KIND_LABELS[c.row.kind]} · ${c.cell}`),
         findings: report.findings.filter((f) => d.findingIds.includes(f.id)),
         record: d.record,
+        covers: d.covers,
+        sites: d.sites,
+        band: d.expectedBand,
       });
     }
-    for (const f of report.findings) {
-      if (f.code !== "not-claimed" || !f.date) continue;
-      const key = f.date.toISOString().slice(0, 10);
-      if (byKey.has(key)) continue;
-      byKey.set(key, { date: f.date, claimed: 0, sar: 0, lines: [], findings: [f], record: null });
-    }
+    // Days the evidence carries but the sheet never claimed are already in
+    // report.days, with their record and any timecard attached — an incentive
+    // sheet is as wrong short as it is long.
     return [...byKey.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([key, v]) => ({ key, ...v }));
@@ -62,6 +72,7 @@ export function DayLedger({
             <th className="border-b border-hairline px-2 py-2 text-center">Days</th>
             <th className="border-b border-hairline px-2 py-2 text-center">Record</th>
             <th className="border-b border-hairline px-2 py-2">What the record sheet holds</th>
+            <th className="border-b border-hairline px-2 py-2">Where</th>
             <th className="border-b border-hairline px-2 py-2 text-right">SAR</th>
           </tr>
         </thead>
@@ -101,20 +112,37 @@ export function DayLedger({
                   {fmtDays(recordDays)}
                 </td>
                 <td className="border-b border-hairline px-2 py-1.5 text-slate-ink">
-                  {blocks.length ? (
+                  {blocks.length || r.covers.length ? (
                     <ul className="space-y-0.5">
                       {blocks.map((b, i) => (
                         <li key={i}>
                           {b.courseNames.join(" + ")}{" "}
                           <span className="text-[10px] text-slate-ink/70">
-                            [{b.duration?.label ?? "not in the course list"}
-                            {b.locations.length ? ` · ${b.locations.join(", ")}` : ""}]
+                            [{b.duration?.label ?? "not in the course list"}]
                           </span>
+                        </li>
+                      ))}
+                      {r.covers.map((c, i) => (
+                        <li key={`tc${i}`} className="text-navy">
+                          <Icon name="calendar-check" size={11} className="me-1 inline align-[-1px]" />
+                          {describeTimecard(c.timecard)}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <em>no session recorded</em>
+                  )}
+                </td>
+                <td className="border-b border-hairline px-2 py-1.5 text-slate-ink">
+                  {r.sites.length ? (
+                    <>
+                      <span className="block">{r.sites.join(", ")}</span>
+                      <span className="text-[10px] text-slate-ink/70">
+                        {r.band ? SECTION_LABELS[r.band] : "distance not set"}
+                      </span>
+                    </>
+                  ) : (
+                    ""
                   )}
                 </td>
                 <td className="border-b border-hairline px-2 py-1.5 text-right tabular-nums text-navy">

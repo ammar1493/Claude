@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
-import { KIND_LABELS } from "./timesheet";
-import type { SheetReport } from "./types";
+import { bandForSite } from "./sites";
+import { describeTimecard, spanDays } from "./timecards";
+import { KIND_LABELS, SECTION_LABELS } from "./timesheet";
+import type { SheetReport, SiteDistance, Timecard } from "./types";
 
 const SEVERITY_LABEL = {
   error: "Must change",
@@ -21,7 +23,11 @@ function fmtDate(d: Date | null): string {
  * what it should say, and what it moves in riyals — so it can be filtered,
  * sorted and pasted into an email back to the trainer.
  */
-export function buildFindingsWorkbook(reports: SheetReport[], monthLabel: string): XLSX.WorkBook {
+export function buildFindingsWorkbook(
+  reports: SheetReport[],
+  monthLabel: string,
+  reference?: { sites: SiteDistance[]; timecards: Timecard[] },
+): XLSX.WorkBook {
   const summary = reports.map((r) => ({
     "Instructor (as written)": r.sheet.instructorName || "—",
     "Instructor (record sheet)": r.matchedInstructor ?? "not matched",
@@ -67,7 +73,9 @@ export function buildFindingsWorkbook(reports: SheetReport[], monthLabel: string
             .map((b) => `${b.courseNames.join(" + ")} [${b.duration?.label ?? "unlisted"}]`)
             .join("; ")
         : "none",
-      Location: d.record?.locations.join(", ") ?? "",
+      Timecard: d.covers.map((c) => describeTimecard(c.timecard)).join("; "),
+      Location: d.sites.join(", "),
+      Band: d.expectedBand ? SECTION_LABELS[d.expectedBand] : "distance not set",
       "Claimed (SAR)": d.claimedSar,
     })),
   );
@@ -80,6 +88,51 @@ export function buildFindingsWorkbook(reports: SheetReport[], monthLabel: string
     "Findings",
   );
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(days), "Day by day");
+
+  /* The two reference tables travel with the report: a verified figure is only
+     as good as the distance it was priced at, and next month's checker should
+     see what this one assumed. */
+  if (reference) {
+    const siteRows = reference.sites.map((s) => ({
+      Location: s.name,
+      "What it is":
+        s.kind === "centre"
+          ? "NEFT centre"
+          : s.kind === "rig"
+            ? "Rig or well"
+            : s.kind === "site"
+              ? "Outbound site"
+              : "Not set",
+      "km from NEFT": s.km ?? "",
+      "Pays at": bandForSite(s) ? SECTION_LABELS[bandForSite(s)!] : "not priced yet",
+      Note: s.note ?? "",
+    }));
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(siteRows.length ? siteRows : [{ Location: "No sites recorded." }]),
+      "Sites",
+    );
+
+    const cardRows = reference.timecards.map((c) => ({
+      Assessor: c.assessor,
+      Provider: c.provider,
+      Unit: c.unit,
+      Activity: c.activity,
+      From: c.start,
+      To: c.end,
+      "Days (dates)": spanDays(c),
+      "Days (stated on card)": c.totalDays ?? "",
+      "Pays at": c.kind === "rig" ? "Rig or well" : c.kind === "centre" ? "NEFT centre" : "Outbound site",
+      "km from NEFT": c.km ?? "",
+      Scan: c.attachmentName ?? "",
+      Note: c.note ?? "",
+    }));
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(cardRows.length ? cardRows : [{ Assessor: "No timecards recorded." }]),
+      "Timecards",
+    );
+  }
 
   const sheet = wb.Sheets.Findings;
   if (sheet) {
@@ -105,7 +158,11 @@ export function buildFindingsWorkbook(reports: SheetReport[], monthLabel: string
   return wb;
 }
 
-export function downloadFindingsWorkbook(reports: SheetReport[], monthLabel: string): void {
-  const wb = buildFindingsWorkbook(reports, monthLabel);
+export function downloadFindingsWorkbook(
+  reports: SheetReport[],
+  monthLabel: string,
+  reference?: { sites: SiteDistance[]; timecards: Timecard[] },
+): void {
+  const wb = buildFindingsWorkbook(reports, monthLabel, reference);
   XLSX.writeFile(wb, `Incentive verification — ${monthLabel}.xlsx`, { compression: true });
 }

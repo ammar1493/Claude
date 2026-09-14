@@ -1,18 +1,23 @@
 import { CourseCatalog } from "./courses";
 import { matchInstructor } from "./names";
+import { bandForSite, describeSite, SiteTable, siteLabel } from "./sites";
+import { coverageFor, cardsFor, describeTimecard, parseIsoDate, siteForTimecard, spanDays } from "./timecards";
 import {
   addDays,
   buildRecordDays,
   buildSessionIndex,
   dayKey,
-  isInHouse,
   sessionCandidates,
   type ParsedRecordSheet,
 } from "./record";
 import { KIND_LABELS, SECTION_LABELS } from "./timesheet";
 import type {
   ClaimKind,
+  ClaimSection,
   CourseDuration,
+  SiteDistance,
+  Timecard,
+  TimecardCover,
   ClaimRow,
   DayReport,
   Finding,
@@ -91,6 +96,22 @@ function rateFor(sheet: IncentiveSheet, kind: ClaimKind): number | null {
   return row ? row.rate : null;
 }
 
+/**
+ * The daily rate a distance band pays, from the sheet's own table.
+ *
+ * Friday has its own line in both bands, so a Friday inside a distance band is
+ * priced from that rather than the ordinary daily rate.
+ */
+function bandDayRate(sheet: IncentiveSheet, band: ClaimSection, weekday?: number): number | null {
+  const rows = sheet.rows.filter((r) => r.section === band && r.rate > 0);
+  if (weekday === FRIDAY) {
+    const friday = rows.find((r) => r.kind === "friday");
+    if (friday) return friday.rate;
+  }
+  const daily = rows.find((r) => r.kind === "daily");
+  return daily ? daily.rate : null;
+}
+
 function suggestedSarFor(sheet: IncentiveSheet, weekday: number, days: number): number | null {
   if (days <= 0) return 0;
   const { half, full } = expectedKinds(weekday);
@@ -113,6 +134,10 @@ export interface VerifyOptions {
   /** Year and month the claim grid's day numbers belong to. */
   year: number;
   month: number;
+  /** Distances the office has set, which decide the rate band per site. */
+  sites: SiteTable;
+  /** Signed assessor timecards, the evidence for days that issue no papers. */
+  timecards: Timecard[];
 }
 
 export function verifySheet(
@@ -123,6 +148,8 @@ export function verifySheet(
 ): SheetReport {
   const year = options?.year ?? record.year;
   const month = options?.month ?? record.month;
+  const sites = options?.sites ?? new SiteTable([]);
+  const timecards = options?.timecards ?? [];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const findings: Finding[] = [];
 
@@ -229,6 +256,109 @@ export function verifySheet(
     : new Map<string, RecordDay>();
   const sessionIndex = buildSessionIndex(record.rows);
 
+  /* ---------------- timecards ---------------- */
+
+  const myNames = [sheet.instructorName, matchedInstructor ?? ""].filter(Boolean);
+  const myCards = cardsFor(timecards, myNames);
+  const coverage = coverageFor(myCards, myNames);
+
+  for (const card of myCards) {
+    const span = spanDays(card);
+    if (span <= 0) {
+      findings.push(
+        makeFinding({
+          severity: "warning",
+          code: "timecard",
+          title: "Timecard has no usable dates",
+          why: `The timecard for ${card.unit || card.activity} gives "${card.start}" to "${card.end}", which is not a date range. It cannot support any day until the dates are fixed.`,
+          suggestion: "Set the card's start and end dates.",
+          sheet: "timesheet",
+          cells: [],
+          date: null,
+          claimedSar: null,
+          suggestedSar: null,
+          delta: null,
+          evidence: [describeTimecard(card)],
+        }),
+      );
+      continue;
+    }
+    if (card.totalDays !== null && Math.abs(card.totalDays - span) > 0.001) {
+      findings.push(
+        makeFinding({
+          severity: "warning",
+          code: "timecard",
+          title: "Timecard days disagree with its dates",
+          why: `The timecard for ${card.unit || card.activity} states ${card.totalDays} day${card.totalDays === 1 ? "" : "s"}, but ${card.start} to ${card.end} is ${span} day${span === 1 ? "" : "s"} counting both ends. Check which the client signed for.`,
+          suggestion: `Either ${span} days, or correct the dates.`,
+          sheet: "timesheet",
+          cells: [],
+          date: null,
+          claimedSar: null,
+          suggestedSar: null,
+          delta: null,
+          evidence: [describeTimecard(card)],
+        }),
+      );
+    }
+  }
+
+  /*
+   * Which band a day belongs in.
+   *
+   * The evidence names a place; the site table turns a place into a distance
+   * and a distance into a band. A rig takes the top band whatever its
+   * kilometres, and a day whose site the office has not priced yet returns
+   * null — the verifier is told to set the distance rather than shown a guess.
+   */
+  const verificationSitesByDate = new Map<string, string[]>();
+  for (const entry of sheet.verification) {
+    if (!entry.date || !entry.location) continue;
+    const key = dayKey(entry.date);
+    const list = verificationSitesByDate.get(key) ?? [];
+    if (!list.includes(entry.location)) list.push(entry.location);
+    verificationSitesByDate.set(key, list);
+  }
+
+  const BAND_RANK: Record<string, number> = { near: 0, mid: 1, far: 2 };
+
+  function bandOfDay(
+    key: string,
+    rec: RecordDay | null,
+    covers: TimecardCover[],
+  ): { band: ClaimSection | null; sites: string[]; unpriced: string[] } {
+    const named: { name: string; site: SiteDistance | null }[] = [];
+    for (const name of rec?.locations ?? []) named.push({ name, site: sites.get(name) });
+    for (const cover of covers) {
+      const site = siteForTimecard(cover.timecard);
+      named.push({ name: site.name, site });
+    }
+    // A trainer's own log is the only clue on a day the record sheet leaves
+    // blank, so it is consulted last rather than not at all.
+    if (!named.length) {
+      for (const name of verificationSitesByDate.get(key) ?? []) {
+        named.push({ name, site: sites.get(name) });
+      }
+    }
+
+    const seen = [...new Set(named.map((n) => siteLabel(n.name)).filter(Boolean))];
+    const unpriced: string[] = [];
+    let band: ClaimSection | null = null;
+    for (const { name, site } of named) {
+      const b = bandForSite(site);
+      if (!b) {
+        const label = siteLabel(name);
+        if (label && !unpriced.includes(label)) unpriced.push(label);
+        continue;
+      }
+      if (band === null || BAND_RANK[b] > BAND_RANK[band]) band = b;
+    }
+    // One unpriced site can only raise the band, so a day that already reads
+    // "far" is settled; anything lower is still open.
+    if (unpriced.length && band !== "far") return { band: null, sites: seen, unpriced };
+    return { band, sites: seen, unpriced };
+  }
+
   /* ---------------- collect the claims by date ---------------- */
 
   interface Claim {
@@ -298,6 +428,8 @@ export function verifySheet(
     let report = dayReports.get(key);
     if (!report) {
       const rec = recordDays.get(key) ?? null;
+      const covers = coverage.get(key) ?? [];
+      const { band, sites: daySites } = bandOfDay(key, rec, covers);
       report = {
         key,
         date,
@@ -308,6 +440,9 @@ export function verifySheet(
         rawRecordDays: rec?.rawLoad ?? 0,
         claims: [],
         record: rec,
+        covers,
+        expectedBand: band,
+        sites: daySites,
         findingIds: [],
       };
       dayReports.set(key, report);
@@ -327,12 +462,19 @@ export function verifySheet(
   /* ---------------- per-day rules ---------------- */
 
   for (const report of [...dayReports.values()].sort((a, b) => a.key.localeCompare(b.key))) {
-    const { date, weekday, record: rec } = report;
+    const { date, weekday, record: rec, covers } = report;
     const teachingClaims = report.claims.filter((c) => c.row.dayValue > 0);
     const travelClaims = report.claims.filter((c) => c.row.kind === "travel");
     const bandClaims = report.claims.filter((c) => c.row.section === "mid" || c.row.section === "far");
     const nearClaims = report.claims.filter((c) => c.row.section === "near");
-    const evidence = evidenceFor(rec);
+    const evidence = [
+      ...evidenceFor(rec),
+      ...covers.map((c) => `Timecard: ${describeTimecard(c.timecard)}`),
+    ];
+    // A signed timecard buys the whole day, so a covered date is a full day of
+    // supported work whatever the record sheet does or does not hold.
+    const covered = covers.length > 0;
+    const supportedDays = Math.max(rec?.load ?? 0, covered ? 1 : 0);
 
     /* Rate line vs the actual day of the week. */
     const wantCategory = categoryOfDate(weekday);
@@ -400,8 +542,34 @@ export function verifySheet(
       });
     }
 
-    /* Nothing in the record sheet for a claimed day. */
-    if (!rec || rec.load === 0) {
+    /*
+     * A trainer cannot be on a rig and in the classroom on the same day, and
+     * here both say so. Which record is wrong is not something the sheets can
+     * settle, so the day is reported and left unpriced rather than resolved
+     * one way by the tool.
+     */
+    if (covered && rec && (rec.blocks.length > 0 || rec.continuations.length > 0)) {
+      const sessions = rec.blocks.length
+        ? `${rec.blocks.length} session${rec.blocks.length === 1 ? "" : "s"} delivered that day`
+        : `a multi-day course still running that day (${rec.continuations.map((b) => b.courseNames.join(" + ")).join("; ")})`;
+      addDayFinding(report, {
+        severity: "error",
+        code: "timecard-conflict",
+        title: "Timecard and record sheet both claim this day",
+        why: `${fmtDate(date)} is covered by a signed timecard (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}), but the record sheet also has ${sessions} at ${rec.locations.join(", ") || "an unnamed site"}. The trainer cannot be in both places — settle which before this day is paid.`,
+        suggestion: "Confirm the timecard dates or correct the record sheet.",
+        sheet: "timesheet",
+        cells: teachingClaims.map((c) => c.cell),
+        date,
+        claimedSar: report.claimedSar,
+        suggestedSar: null,
+        delta: null,
+        evidence,
+      });
+    }
+
+    /* Nothing at all behind a claimed day. */
+    if (!covered && (!rec || rec.load === 0)) {
       const onlyTravel = teachingClaims.length > 0 && teachingClaims.every((c) => c.row.kind === "travel");
       const severity: Severity = onlyTravel ? "warning" : "error";
       const cells = teachingClaims.map((c) => c.cell);
@@ -426,18 +594,39 @@ export function verifySheet(
       continue;
     }
 
+    /*
+     * The band comes first: whether a day was paid at the right rate decides
+     * whether the "no half-day line in this band" note applies at all. A day
+     * claimed in the wrong band gets the band correction and nothing else —
+     * two notes pointing opposite ways help nobody.
+     */
+    const claimedBand = teachingClaims.length
+      ? (teachingClaims[0].row.section as ClaimSection)
+      : null;
+    const { band: expectedBand, unpriced } = bandOfDay(report.key, rec, covers);
+    report.expectedBand = expectedBand;
+    const bandIsWrong = Boolean(
+      teachingClaims.length && expectedBand && claimedBand && expectedBand !== claimedBand,
+    );
+
     /* The headline check: claimed days against delivered days. */
     const claimedTeaching = teachingClaims.reduce((s, c) => s + c.row.dayValue, 0);
     // The distance bands pay one flat day rate with no half-day line, so a
     // half-day course at a rig still books the whole day. Comparing day
     // fractions there would flag every rig trip.
     const bandOnly = teachingClaims.length > 0 && nearClaims.length === 0 && bandClaims.length > 0;
-    if (bandOnly && rec.load < 1) {
+    if (bandIsWrong) {
+      /*
+       * Left to the band finding below, which already names the right band and
+       * its rate. Adding a day-value correction on top would subtract the same
+       * riyals twice.
+       */
+    } else if (bandOnly && supportedDays < 1) {
       addDayFinding(report, {
         severity: "info",
         code: "band-day",
         title: "Distance day paid in full for a half-day course",
-        why: `${fmtDate(date)} is claimed at the ${SECTION_LABELS[bandClaims[0].row.section]} day rate of ${sar(bandClaims[0].row.rate)}, and the record sheet shows ${fmtDays(rec.load)} of teaching (${rec.blocks.map((b) => b.courseNames.join(" + ")).join("; ")}) at ${rec.locations.join(", ") || "an unnamed site"}. The band has no half-day line, so this is right if the trip took the day — no change needed unless it did not.`,
+        why: `${fmtDate(date)} is claimed at the ${SECTION_LABELS[bandClaims[0].row.section]} day rate of ${sar(bandClaims[0].row.rate)}, and the record sheet shows ${fmtDays(supportedDays)} of teaching (${(rec?.blocks ?? []).map((b) => b.courseNames.join(" + ")).join("; ")}) at ${report.sites.join(", ") || "an unnamed site"}. The band has no half-day line, so this is right if the trip took the day — no change needed unless it did not.`,
         suggestion: null,
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),
@@ -447,22 +636,23 @@ export function verifySheet(
         delta: null,
         evidence,
       });
-    } else if (claimedTeaching > rec.load + 0.001 && travelClaims.length === 0) {
-      const suggested = suggestedSarFor(sheet, weekday, rec.load);
+    } else if (claimedTeaching > supportedDays + 0.001 && travelClaims.length === 0) {
+      const blocks = rec?.blocks ?? [];
+      const suggested = suggestedSarFor(sheet, weekday, supportedDays);
       const claimedSar = teachingClaims.reduce((s, c) => s + c.row.rate, 0);
-      const courseList = rec.blocks
+      const courseList = blocks
         .map((b) => `${b.courseNames.join(" + ")} (${b.duration ? b.duration.label : "not in the course list"})`)
         .join("; ");
       addDayFinding(report, {
         severity: "error",
         code: "over-claim",
-        title: `${fmtDays(claimedTeaching)} claimed, ${fmtDays(rec.load)} delivered`,
+        title: `${fmtDays(claimedTeaching)} claimed, ${fmtDays(supportedDays)} delivered`,
         why:
-          `On ${fmtDate(date)} the record sheet shows ${rec.blocks.length === 1 ? "one session" : `${rec.blocks.length} sessions`}: ${courseList}. ` +
-          `By the course list that is ${fmtDays(rec.load)}, but the sheet claims ${fmtDays(claimedTeaching)}. ` +
-          `Change it to "${KIND_LABELS[rec.load <= 0.5 ? expectedKinds(weekday).half : expectedKinds(weekday).full]}"` +
+          `On ${fmtDate(date)} the record sheet shows ${blocks.length === 1 ? "one session" : `${blocks.length} sessions`}: ${courseList}. ` +
+          `By the course list that is ${fmtDays(supportedDays)}, but the sheet claims ${fmtDays(claimedTeaching)}. ` +
+          `Change it to "${KIND_LABELS[supportedDays <= 0.5 ? expectedKinds(weekday).half : expectedKinds(weekday).full]}"` +
           (suggested !== null ? `, ${sar(suggested)} instead of ${sar(claimedSar)}.` : "."),
-        suggestion: `Claim ${fmtDays(rec.load)} for this date.`,
+        suggestion: `Claim ${fmtDays(supportedDays)} for this date.`,
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),
         date,
@@ -471,7 +661,7 @@ export function verifySheet(
         delta: suggested === null ? null : suggested - claimedSar,
         evidence,
       });
-    } else if (!bandOnly && claimedTeaching < rec.load - 0.001) {
+    } else if (!bandOnly && !covered && rec && claimedTeaching < rec.load - 0.001) {
       const suggested = suggestedSarFor(sheet, weekday, rec.load);
       const claimedSar = teachingClaims.reduce((s, c) => s + c.row.rate, 0);
       addDayFinding(report, {
@@ -490,33 +680,54 @@ export function verifySheet(
       });
     }
 
-    /* Distance band against where the record sheet puts the day. */
-    if (bandClaims.length && rec.allInHouse) {
+    /*
+     * Distance band against where the day actually happened.
+     *
+     * Once the office has given a site its kilometres the band is arithmetic,
+     * so the correction is priced from the sheet's own rate table: what the
+     * right band's line pays, against what was claimed. A site still without a
+     * distance is reported as exactly that — the one thing the tool cannot
+     * work out on its own.
+     */
+    if (bandIsWrong && expectedBand && claimedBand) {
+      const claimedSar = teachingClaims.reduce((s, c) => s + c.row.rate, 0);
+      const suggested =
+        expectedBand === "near"
+          ? suggestedSarFor(sheet, weekday, supportedDays)
+          : bandDayRate(sheet, expectedBand, weekday);
+      const where = report.sites.map((n) => describeSite(sites.get(n) ?? { name: n, kind: "unknown", km: null, note: "" })).join(", ");
       addDayFinding(report, {
         severity: "error",
         code: "band",
-        title: "Distance rate claimed for an in-house day",
-        why: `${fmtDate(date)} is claimed under "${SECTION_LABELS[bandClaims[0].row.section]}" at ${sar(bandClaims[0].row.rate)}, but every session the record sheet has for that day ran at ${rec.locations.join(", ")}. Move it to the ${SECTION_LABELS.near} band.`,
-        suggestion: `Move to the ${SECTION_LABELS.near} band.`,
+        title:
+          expectedBand === "near"
+            ? "Distance rate claimed for a day inside the 150 km band"
+            : `Day belongs in the ${SECTION_LABELS[expectedBand]} band`,
+        why:
+          `${fmtDate(date)} is claimed under "${SECTION_LABELS[claimedBand]}" at ${sar(claimedSar)}, but the day ran at ${where || "an unnamed site"}, which the distance table puts in the ${SECTION_LABELS[expectedBand]} band. ` +
+          (suggested !== null
+            ? `Move it to that band — ${sar(suggested)} instead of ${sar(claimedSar)}.`
+            : `Move it to that band.`),
+        suggestion: `Move to the ${SECTION_LABELS[expectedBand]} band.`,
         sheet: "timesheet",
-        cells: bandClaims.map((c) => c.cell),
+        cells: teachingClaims.map((c) => c.cell),
         date,
-        claimedSar: bandClaims.reduce((s, c) => s + c.row.rate, 0),
-        suggestedSar: suggestedSarFor(sheet, weekday, rec.load),
-        delta: null,
+        claimedSar,
+        suggestedSar: suggested,
+        delta: suggested === null ? null : suggested - claimedSar,
         evidence,
       });
-    } else if (nearClaims.length && rec.locations.length && !rec.locations.some(isInHouse)) {
+    } else if (teachingClaims.length && !expectedBand && unpriced.length) {
       addDayFinding(report, {
         severity: "warning",
-        code: "band",
-        title: "Out-of-centre day claimed at the in-house rate",
-        why: `The record sheet puts ${fmtDate(date)} at ${rec.locations.join(", ")}, not the NEFT centre, yet the claim sits in the ${SECTION_LABELS.near} band. If that site is over 150 km away the distance band applies instead — confirm the distance and move the tick if so.`,
-        suggestion: "Confirm the distance and pick the right band.",
+        code: "site-unknown",
+        title: `How far is ${unpriced[0]}?`,
+        why: `${fmtDate(date)} ran at ${unpriced.join(", ")}, which is not the NEFT centre, so it is an outbound course — but the distance table has no kilometres for it, and the band decides the rate. Set the distance (or mark it a rig or well) and this day prices itself.`,
+        suggestion: `Set a distance for ${unpriced.join(", ")}.`,
         sheet: "timesheet",
-        cells: nearClaims.map((c) => c.cell),
+        cells: teachingClaims.map((c) => c.cell),
         date,
-        claimedSar: nearClaims.reduce((s, c) => s + c.row.rate, 0),
+        claimedSar: teachingClaims.reduce((s, c) => s + c.row.rate, 0),
         suggestedSar: null,
         delta: null,
         evidence,
@@ -524,7 +735,7 @@ export function verifySheet(
     }
 
     /* Travel claimed on a day that also taught. */
-    if (travelClaims.length && rec.blocks.length) {
+    if (travelClaims.length && rec && rec.blocks.length) {
       addDayFinding(report, {
         severity: "warning",
         code: "travel",
@@ -542,7 +753,7 @@ export function verifySheet(
     }
 
     /* The record itself says more than a day happened. */
-    if (rec.rawLoad > 1.001) {
+    if (rec && rec.rawLoad > 1.001) {
       addDayFinding(report, {
         severity: "warning",
         code: "record-conflict",
@@ -564,10 +775,70 @@ export function verifySheet(
 
   const monthStart = new Date(year, month, 1);
   const monthEnd = new Date(year, month, daysInMonth);
+
+  /*
+   * Days the evidence carries but the sheet never claimed.
+   *
+   * These get a day report of their own as well as a finding, so the
+   * day-by-day ledger shows the whole month — what was taught and not claimed
+   * next to what was claimed — rather than only the dates the trainer ticked.
+   */
+  const addEvidenceDay = (key: string, date: Date) => {
+    const rec = recordDays.get(key) ?? null;
+    const covers = coverage.get(key) ?? [];
+    const { band, sites: daySites } = bandOfDay(key, rec, covers);
+    const report: DayReport = {
+      key,
+      date,
+      weekday: date.getDay(),
+      claimedDays: 0,
+      claimedSar: 0,
+      recordDays: rec?.load ?? 0,
+      rawRecordDays: rec?.rawLoad ?? 0,
+      claims: [],
+      record: rec,
+      covers,
+      expectedBand: band,
+      sites: daySites,
+      findingIds: [],
+    };
+    dayReports.set(key, report);
+    return report;
+  };
+
+  /* A signed timecard day with nothing claimed against it. */
+  for (const [key, covers] of coverage) {
+    if (dayReports.has(key)) continue;
+    const date = parseIsoDate(key);
+    if (!date || date < monthStart || date > monthEnd) continue;
+    const dayReport = addEvidenceDay(key, date);
+    const card = covers[0].timecard;
+    const band = bandForSite(siteForTimecard(card));
+    const rate = band && band !== "near" ? bandDayRate(sheet, band, date.getDay()) : null;
+    findings.push(
+      makeFinding({
+        severity: "info",
+        code: "timecard-not-claimed",
+        title: "Timecard day not claimed",
+        why: `A signed timecard covers ${fmtDate(date)} (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}) but the sheet claims nothing for it. Check whether the trainer missed the day.`,
+        suggestion: rate === null ? null : `Add a ${SECTION_LABELS[band!]} day, ${sar(rate)}.`,
+        sheet: "timesheet",
+        cells: [],
+        date,
+        claimedSar: 0,
+        suggestedSar: rate,
+        delta: null,
+        evidence: covers.map((c) => `Timecard: ${describeTimecard(c.timecard)}`),
+      }),
+    );
+    dayReport.findingIds.push(findings[findings.length - 1].id);
+  }
+
   for (const [key, rec] of recordDays) {
     if (dayReports.has(key)) continue;
     if (rec.date < monthStart || rec.date > monthEnd) continue;
     if (rec.load === 0) continue;
+    const dayReport = addEvidenceDay(key, rec.date);
     findings.push(
       makeFinding({
         severity: "info",
@@ -584,6 +855,7 @@ export function verifySheet(
         evidence: evidenceFor(rec),
       }),
     );
+    dayReport.findingIds.push(findings[findings.length - 1].id);
   }
 
   /* ---------------- allowances and admin lines ---------------- */
@@ -720,13 +992,25 @@ export function verifySheet(
         }),
       );
     } else if (entry.date.getFullYear() !== year || entry.date.getMonth() !== month) {
+      // Excel reads 10/08/2026 as 8 October unless the sheet is set to en-GB,
+      // and these sheets are typed the other way round, so a date that lands in
+      // the right month once day and month are swapped is almost always that.
+      const swapped = new Date(entry.date.getFullYear(), entry.date.getDate() - 1, entry.date.getMonth() + 1);
+      const looksSwapped =
+        entry.date.getDate() <= 12 && swapped.getMonth() === month && swapped.getFullYear() === year;
       findings.push(
         makeFinding({
           severity: "error",
           code: "verification",
           title: "Verification line is outside the month",
-          why: `Row ${entry.rowIndex} is dated ${entry.date.toLocaleDateString("en-GB")}, which is not in ${record.monthLabel}. A claim for ${record.monthLabel} cannot rest on it — correct the date or move the line to the right month's sheet.`,
-          suggestion: `Re-date to ${record.monthLabel}, or remove.`,
+          why:
+            `Row ${entry.rowIndex} is dated ${entry.date.toLocaleDateString("en-GB")}, which is not in ${record.monthLabel}. A claim for ${record.monthLabel} cannot rest on it.` +
+            (looksSwapped
+              ? ` Written the other way round it is ${swapped.toLocaleDateString("en-GB")}, which is in the month — Excel reads a typed date as month-first unless told otherwise, so that is most likely what happened.`
+              : " Correct the date, or move the line to the right month's sheet."),
+          suggestion: looksSwapped
+            ? `Re-date to ${swapped.toLocaleDateString("en-GB")}.`
+            : `Re-date to ${record.monthLabel}, or remove.`,
           sheet: "verification",
           cells: [`A${entry.rowIndex}`],
           date: entry.date,
