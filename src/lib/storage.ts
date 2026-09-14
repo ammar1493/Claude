@@ -11,10 +11,14 @@ const DB_VERSION = 1;
 const STORE = "workbooks";
 
 export interface StoredWorkbook {
-  /** "dataset" for the main training workbook, "qiddiya:<filename>" for QCTA. */
+  /**
+   * "dataset" for the main training workbook, "qiddiya:<filename>" for QCTA,
+   * "record"/"courses" for the incentive verifier's two reference workbooks
+   * and "incentive:<filename>" for a trainer's sheet.
+   */
   id: string;
   name: string;
-  kind: "dataset" | "qiddiya";
+  kind: "dataset" | "qiddiya" | "record" | "courses" | "incentive";
   savedAt: number;
   data: ArrayBuffer;
 }

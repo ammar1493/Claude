@@ -50,7 +50,7 @@ export function Dashboard() {
           <span className="text-base font-bold tracking-tight text-navy sm:text-lg">
             NEFT Training Analytics
           </span>
-          <nav className="no-print ml-auto flex flex-wrap gap-0.5">
+          <nav className="no-print ml-auto flex flex-wrap items-center gap-0.5">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -67,6 +67,16 @@ export function Dashboard() {
                 <span className="hidden lg:inline">{t.label}</span>
               </button>
             ))}
+            {/* Its own route rather than a tab: the verifier reads the record
+                sheet and the course list, not the training workbook the tabs
+                share, so it has nothing to gain from the dashboard's state. */}
+            <a
+              href="/incentives"
+              className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,box-shadow,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
+            >
+              <Icon name="check-circle" size={15} />
+              <span className="hidden lg:inline">Incentive Verification</span>
+            </a>
           </nav>
         </div>
       </header>

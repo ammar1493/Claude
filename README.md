@@ -19,6 +19,62 @@ using the same aggregation rules so the numbers match.
 | Quality Metrics | A scorecard over all thirteen evaluation questions: overall score, weakest questions, an instructor-by-question grid, who needs attention, and the raw counts per question |
 | Data Table | The filtered raw rows |
 
+`/incentives` is a separate route rather than a tab — see
+[Incentive verification](#incentive-verification).
+
+## Incentive verification
+
+`/incentives` checks the time sheets trainers submit for their monthly
+incentive against what they actually taught. It takes three files, all read in
+the browser:
+
+| File | What it is |
+| --- | --- |
+| Record sheet | The month's certificate export — `CertNo`, `StudentName`, `ClientName`, `InstructorName`, `PrintedCourseName`, `IssuedOn`, `Location`, `SessionNo`, `RigNo`. Evidence that a session ran. |
+| Courses Duration | `Course Name` / `Duration`, where duration is `Half Day`, `1 Full Day` or `N Days`. |
+| Incentive sheets | The trainers' workbooks — a `.zip` of them, or the `.xlsx` files. Each has a claim grid (rate lines down, days of the month across) and a verification log (one line per session). |
+
+Each claimed day is priced against the sessions that instructor delivered that
+day, and the report names the cell, says why it has to change, and what it
+should say instead. The rules live in `src/lib/incentives/verify.ts`; the
+interesting ones are:
+
+- **A day is worth what its courses are worth.** A full-day claim on a date
+  whose only session is a half-day course comes back as an over-claim, priced
+  at the trainer's own rate table — the case the module exists for.
+- **Sessions are grouped into classes before they are counted.** One morning
+  class issues several session numbers (an Awareness group and a Level-2 group,
+  split again per client), so counting session numbers would turn one half day
+  into three. A new class starts when the course subject changes or when the
+  session numbering jumps; `groupSessionsIntoBlocks()` carries the reasoning.
+- **Multi-day courses issue their certificates on day one**, so a `4 Days`
+  course starting on the 16th makes the 17th, 18th and 19th teaching days too.
+- **The distance bands have no half-day line**, so a half-day course at a rig
+  still books the whole day there. Those days are reported as notes, never as
+  over-claims; what *is* an error is a distance rate on a day the record sheet
+  puts at the NEFT centre.
+- **Short-hand course names are not guessed at.** "first aid" matches five
+  courses in the list, one of them a full day, so the line is reported as
+  ambiguous rather than valued.
+- Names are matched on their consonant skeleton (`src/lib/incentives/names.ts`),
+  which is what joins "Ahmed Ibrahim Aboubakr" to the record sheet's
+  "Ahmed Abubakr" and "ASIF FARID" to "Asif Farid Israr Ulhaq".
+
+Findings are graded **Must change** (a claim that is wrong), **Check** (needs a
+human — a distance to confirm, a duration that reads short) and **Note**
+(under-claims, unmatched course names). Only priced Must-change findings move
+the verified total; the card says how many are still open.
+
+**Getting it out.** The claim grid on screen is the report — a coloured tick is
+a finding, and selecting it opens the wording to send back to the trainer.
+**Findings workbook** downloads Summary / Findings / Day-by-day sheets (values
+only: the community build of SheetJS cannot write cell fills, so the
+highlighting stays in the app and on **Print**).
+
+The three workbooks are kept in IndexedDB, so the record sheet and course list
+survive a reload and only the trainers' sheets change month to month. Nothing
+is sent to a server.
+
 ## Brand system
 
 Tokens live in `src/lib/brand.ts` and `src/app/globals.css`, taken from sections

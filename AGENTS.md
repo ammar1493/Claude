@@ -28,6 +28,20 @@ the date span it actually covers — check that before investigating a number.
 Rows flagged in the workbook's `Duplicates` column are real and are counted like
 any other. Nothing filters on that column.
 
+## Incentive sheets
+
+The `/incentives` verifier reads three workbooks and none of them is the
+training workbook the dashboard tabs share, so it holds its own state. The
+rules it applies, and why each is written the way it is, are in the README
+under *Incentive verification*; the short version is that a day is valued from
+the course list, sessions are grouped into classes before they are counted, and
+anything the evidence cannot settle is reported rather than guessed.
+
+Trainers fill these sheets by hand, so the parser matches on wording and not on
+row numbers, and dates, names, session numbers and durations all arrive in
+several spellings. Before changing a parsing rule, check it against every sheet
+in a month rather than the one that prompted the change.
+
 ## Charts
 
 Chart label collisions are checked by measuring intersecting text bounding boxes
