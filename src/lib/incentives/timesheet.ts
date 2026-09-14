@@ -58,6 +58,9 @@ function sheetToGrid(sheet: XLSX.WorkSheet): Grid {
  * other way round, every 150-350 km claim would be filed and described as a
  * rig trip.
  */
+/** From a string so the en dash survives any bundler and any charset. */
+const AFTERNOON_SLOT = new RegExp("\\b1\\s*(to|-|\\u2013)\\s*5\\b|afternoon|pm\\b");
+
 const SECTION_PATTERNS: [RegExp, ClaimSection][] = [
   [/per\s*diem|trainings?\s+with\s+distance\s+over/i, "perdiem"],
   [/admins?\s*(and|&)\s*coordinator/i, "admin"],
@@ -91,7 +94,7 @@ function classify(label: string, section: ClaimSection): { kind: ClaimKind; dayV
     }
     if (/other\s*holiday/.test(l)) return { kind: "holiday", dayValue: 1 };
     if (/half\s*day/.test(l)) {
-      const pm = /\b1\s*(to|-|–)\s*5\b|afternoon|pm\b/.test(l);
+      const pm = AFTERNOON_SLOT.test(l);
       return { kind: pm ? "halfPM" : "halfAM", dayValue: 0.5 };
     }
     if (/full\s*day/.test(l)) return { kind: "full", dayValue: 1 };

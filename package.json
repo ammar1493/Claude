@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:standalone": "node standalone/build.mjs"
   },
   "dependencies": {
     "next": "^16.3.3",
@@ -17,10 +18,12 @@
     "xlsx": "0.18.5"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/postcss": "4.1.13",
     "@types/node": "22.15.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.28.2",
     "postcss": "8.5.6",
     "tailwindcss": "4.1.13",
     "typescript": "5.8.3"

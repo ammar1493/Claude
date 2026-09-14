@@ -220,6 +220,32 @@ in the first column and the counts of 1–5 star responses in the next five —
 the layout app.R read. Point `NEFT_QUALITY_XLSX_URL` at a different workbook to
 override it. Missing tabs are reported on the tab rather than failing the page.
 
+### Hosting only the verifier
+
+`npm run build:standalone` bundles `/incentives` into a folder of plain static
+files — `index.html`, `app.js`, `styles.css` and the mark — that runs anywhere a
+static file can be served, with no Next.js server behind it. Everything the page
+does still happens in the browser, so the workbooks never leave it.
+
+Two details make the bundle portable rather than merely built:
+
+- **Downloads go through whichever route the host allows.** On its own origin
+  that is an anchor with a `download` attribute; inside the claude.ai artifact
+  viewer the page is sandboxed and an anchor is inert, so
+  `src/lib/incentives/download.ts` asks the platform's `downloads` capability
+  first and falls back. Publish it there with `capabilities: {downloads: true}`
+  or the corrected sheet cannot reach the viewer.
+- **The JavaScript is ASCII-only** (`charset: "ascii"`). A host that serves
+  `.js` without a charset makes the browser read it as latin-1, and the
+  combining-mark range in the name matcher then becomes an invalid regular
+  expression that throws before anything mounts. Regexes a bundler prints
+  verbatim are built from strings in `names.ts` and `timesheet.ts` for the same
+  reason — those two files are the ones to watch if a new one is added.
+
+Assets resolve through `ASSET_BASE` in `src/lib/brand.ts`: `/` in the Next app,
+empty in the standalone build, which also hides the link back to a dashboard
+that is not hosted alongside it.
+
 ## Deploying to Vercel
 
 `main` is the production branch and carries the app. Vercel builds it on every

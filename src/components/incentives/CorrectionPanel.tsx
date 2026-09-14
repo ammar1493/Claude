@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { buildCorrectedWorkbook, previewRows, type CorrectionPlan } from "@/lib/incentives/correct";
+import { saveFile } from "@/lib/incentives/download";
 import type { Decision, Finding, SheetReport } from "@/lib/incentives/types";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
@@ -56,21 +57,18 @@ export function CorrectionPanel({
     setError(null);
     try {
       const out = await buildCorrectedWorkbook(original, report, plan, { rebuildLog });
-      const url = URL.createObjectURL(
-        new Blob([out.data as BlobPart], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        }),
-      );
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = out.fileName;
-      // Chromium only honours the download attribute on an anchor that is in
-      // the document; detached, the file saves as "download".
-      a.style.display = "none";
-      document.body.append(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      const blob = new Blob([out.data as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const outcome = await saveFile(out.fileName, blob);
+      if (outcome === "declined") {
+        setError("The download was declined — the corrected sheet was not saved.");
+        return;
+      }
+      if (outcome === "failed") {
+        setError("This browser would not save the file. Try again, or open the page in a new tab.");
+        return;
+      }
       setResult({ applied: out.applied, skipped: out.skipped, total: out.newTotal });
     } catch (e) {
       setError((e as Error).message);

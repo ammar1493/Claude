@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { saveFile } from "./download";
 import { bandForSite } from "./sites";
 import { describeTimecard, spanDays } from "./timecards";
 import { KIND_LABELS, SECTION_LABELS } from "./timesheet";
@@ -158,11 +159,17 @@ export function buildFindingsWorkbook(
   return wb;
 }
 
-export function downloadFindingsWorkbook(
+export async function downloadFindingsWorkbook(
   reports: SheetReport[],
   monthLabel: string,
   reference?: { sites: SiteDistance[]; timecards: Timecard[] },
-): void {
+): Promise<void> {
   const wb = buildFindingsWorkbook(reports, monthLabel, reference);
-  XLSX.writeFile(wb, `Incentive verification — ${monthLabel}.xlsx`, { compression: true });
+  // writeFile() drives its own anchor, which the artifact viewer's sandbox
+  // makes inert; write the bytes and let saveFile() pick the right route.
+  const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true }) as ArrayBuffer;
+  const blob = new Blob([bytes], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  await saveFile(`Incentive verification ${monthLabel}.xlsx`.replace(/\s+/g, " ").trim(), blob);
 }

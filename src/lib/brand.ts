@@ -29,6 +29,19 @@ export const TAKAMOL_COLOR = NEFT_GREEN;
 export const MUTED_BAR = NEFT_SLATE;
 export const DANGER = "#B3261E";
 
+/**
+ * Where static assets sit relative to the page.
+ *
+ * The Next app serves them from the site root; the standalone bundle is a
+ * folder of files with no root to speak of, so its build replaces this with an
+ * empty string. Undeclared anywhere else, which `typeof` makes safe.
+ */
+declare const __ASSET_BASE__: string | undefined;
+export const ASSET_BASE = typeof __ASSET_BASE__ === "string" ? __ASSET_BASE__ : "/";
+
+/** True in the full dashboard, false when only the verifier is hosted. */
+export const HAS_DASHBOARD = ASSET_BASE === "/";
+
 export const BRAND = {
   name: "NEFT Energies",
   appTitle: "NEFT Training Analytics",
@@ -38,12 +51,12 @@ export const BRAND = {
    * section in fact directs you to the icon mark alone at small sizes.
    * Full colour on white and light neutrals only; never on navy or gold.
    */
-  logo: "/brand/neft-logo.png",
+  logo: `${ASSET_BASE}brand/neft-logo.png`,
   /** Same mark, animated. Kept for surfaces where the build-on reads well. */
-  logoAnimated: "/brand/neft-logo.gif",
-  signature: "/brand/neft-signature.gif",
-  sloganSequence: "/brand/neft-slogan-sequence.gif",
-  sloganWords: "/brand/neft-slogan-words.gif",
+  logoAnimated: `${ASSET_BASE}brand/neft-logo.gif`,
+  signature: `${ASSET_BASE}brand/neft-signature.gif`,
+  sloganSequence: `${ASSET_BASE}brand/neft-slogan-sequence.gif`,
+  sloganWords: `${ASSET_BASE}brand/neft-slogan-words.gif`,
 } as const;
 
 /** Tajawal carries both Latin and Arabic; headings 700-900, body & UI 400-500. */

@@ -54,6 +54,13 @@ Findings carry ids derived from their code, date and cells rather than a
 counter, because the verifier decides them one at a time while edits to the
 distance table re-run every rule.
 
+`npm run build:standalone` bundles the same components into static files that
+run without Next.js. Two things keep that working and are easy to break: the
+bundle is ASCII-only, so a new regex with a non-ASCII range must be built from
+a string (see `names.ts`), and a file download must go through
+`saveFile()` rather than its own anchor, because the artifact viewer's sandbox
+makes anchors inert.
+
 Two facts live outside the files and are entered by the office — how far each
 site is from the centre, and the signed timecards for work that issues no
 certificates. Both are kept in IndexedDB and reused every month. Never infer

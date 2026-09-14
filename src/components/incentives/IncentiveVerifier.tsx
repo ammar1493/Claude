@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BRAND } from "@/lib/brand";
+import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
 import { downloadFindingsWorkbook } from "@/lib/incentives/export";
 import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
@@ -318,7 +318,7 @@ export function IncentiveVerifier() {
               <>
                 <button
                   type="button"
-                  onClick={() => downloadFindingsWorkbook(reports, monthLabel || "report", { sites, timecards })}
+                  onClick={() => void downloadFindingsWorkbook(reports, monthLabel || "report", { sites, timecards })}
                   className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-bold text-navy transition-[filter,scale] duration-150 ease-out hover:brightness-105 active:scale-[0.96]"
                 >
                   <Icon name="download" size={14} />
@@ -334,13 +334,17 @@ export function IncentiveVerifier() {
                 </button>
               </>
             )}
-            <a
-              href="/"
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
-            >
-              <Icon name="gauge" size={14} />
-              Dashboard
-            </a>
+            {/* Only the verifier is hosted in the standalone build, so the
+                link back to the dashboard would go nowhere. */}
+            {HAS_DASHBOARD && (
+              <a
+                href="/"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
+              >
+                <Icon name="gauge" size={14} />
+                Dashboard
+              </a>
+            )}
           </nav>
         </div>
       </header>

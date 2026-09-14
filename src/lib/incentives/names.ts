@@ -16,11 +16,22 @@
 
 const VOWELS = /[AEIOUY]/g;
 
+/*
+ * Built from strings rather than written as literals.
+ *
+ * A bundler prints a regex literal verbatim, so a combining-mark range ends up
+ * as raw UTF-8 in the output; served without a charset it decodes as latin-1
+ * and the range becomes invalid, which throws before the page mounts. Inside a
+ * string the escapes survive whatever the bundler and the host do.
+ */
+const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
+const NOT_NAME_CHARS = new RegExp("[^A-Za-z\\u00C0-\\u024F\\s'-]", "g");
+
 export function skeleton(token: string): string {
   const t = token
     .toUpperCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(COMBINING_MARKS, "")
     .replace(/[^A-Z]/g, "");
   if (!t) return "";
   const rest = t.slice(1).replace(VOWELS, "");
@@ -30,7 +41,7 @@ export function skeleton(token: string): string {
 /** Name parts, minus the connectors that only sometimes get written. */
 export function nameTokens(name: string): string[] {
   return String(name ?? "")
-    .replace(/[^A-Za-zÀ-ɏ\s'-]/g, " ")
+    .replace(NOT_NAME_CHARS, " ")
     // "Al-Eid" and "Al Eid" must reduce to the same token as "Aleid".
     .replace(/\b(AL|EL|ABD|ABU|BIN|IBN)[\s-]+/gi, "$1")
     .split(/[\s'-]+/)
