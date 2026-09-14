@@ -193,6 +193,22 @@ export interface VerificationEntry {
   durationDays: number | null;
 }
 
+/**
+ * Where the verification log's columns sit, so a corrected copy can be written
+ * back into the trainer's own tab rather than a new one.
+ */
+export interface VerificationLayout {
+  /** 1-based row carrying ACTUAL DATE / COURSE NAME / … */
+  headerRow: number;
+  dateColumn: string;
+  courseColumn: string;
+  locationColumn: string;
+  sessionColumn: string;
+  durationColumn: string;
+  /** Last row with anything written on it, including pre-printed dates. */
+  lastRow: number;
+}
+
 /** A parsed incentive workbook. */
 export interface IncentiveSheet {
   fileName: string;
@@ -207,11 +223,31 @@ export interface IncentiveSheet {
   statedGrandTotal: number | null;
   grandTotalCell: string;
   verification: VerificationEntry[];
+  verificationLayout: VerificationLayout | null;
   /** Problems hit while reading the file, before any cross-checking. */
   parseWarnings: string[];
 }
 
 export type Severity = "error" | "warning" | "info";
+
+/**
+ * One cell the corrected workbook will carry differently.
+ *
+ * A finding that can say exactly which cells change, and to what, can be
+ * applied to the trainer's own file rather than only described. `null` clears
+ * the cell; a number ticks a rate line or writes a date serial; a string
+ * writes text into the verification log.
+ */
+export interface CellEdit {
+  sheet: "timesheet" | "verification";
+  cell: string;
+  value: string | number | null;
+  /** How the change reads in the list of what was applied. */
+  describe: string;
+}
+
+/** What the verifier decided to do about a finding. */
+export type Decision = "pending" | "accepted" | "kept";
 
 /**
  * One thing to change on a sheet.
@@ -237,6 +273,12 @@ export interface Finding {
   delta: number | null;
   /** Record Sheet lines that back the finding, for the evidence panel. */
   evidence: string[];
+  /**
+   * The cells to change if the correction is accepted, or null when the
+   * finding needs a person — a timecard that contradicts the record sheet, a
+   * session number nobody can guess.
+   */
+  fix: CellEdit[] | null;
 }
 
 /** Everything the app knows about one trainer's month. */

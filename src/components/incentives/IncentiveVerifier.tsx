@@ -163,6 +163,18 @@ export function IncentiveVerifier() {
     void putSetting("incentive:sites", next);
   }, []);
 
+  /** Set one site, from wherever the question came up. */
+  const setSite = useCallback((name: string, patch: Partial<SiteDistance>) => {
+    setSites((prev) => {
+      const key = siteKey(name);
+      const next = prev.some((s) => siteKey(s.name) === key)
+        ? prev.map((s) => (siteKey(s.name) === key ? { ...s, ...patch } : s))
+        : [...prev, { name, kind: "unknown" as const, km: null, note: "", ...patch }];
+      void putSetting("incentive:sites", next);
+      return next;
+    });
+  }, []);
+
   const saveTimecards = useCallback((next: Timecard[]) => {
     setTimecards(next);
     void putSetting("incentive:timecards", next);
@@ -454,7 +466,7 @@ export function IncentiveVerifier() {
                   active === ALL_SHEETS ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
-                All {reports.length} sheets
+                All {reports.length} sheet{reports.length === 1 ? "" : "s"}
               </button>
               <button
                 type="button"
@@ -545,7 +557,15 @@ export function IncentiveVerifier() {
               />
             )}
             {active >= 0 && reports[active] && (
-              <SheetReportView key={reports[active].sheet.fileName} report={reports[active]} />
+              <SheetReportView
+                key={reports[active].sheet.fileName}
+                report={reports[active]}
+                original={
+                  sheets.find((f) => f.name === reports[active].sheet.fileName)?.data ?? null
+                }
+                sites={sites}
+                onSetSite={setSite}
+              />
             )}
           </>
         )}

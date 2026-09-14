@@ -42,6 +42,18 @@ row numbers, and dates, names, session numbers and durations all arrive in
 several spellings. Before changing a parsing rule, check it against every sheet
 in a month rather than the one that prompted the change.
 
+The corrected workbook is written by editing the original file's XML in place
+(`xlsxEdit.ts`), never by re-serialising it through SheetJS — the community
+build cannot round-trip fills, merges or print settings, so a rebuilt workbook
+would not be the trainer's template any more. Two things bite when editing that
+XML: `<dimension>` has to be widened or readers silently ignore rows past the
+old range, and a cell written where none existed has no style, so a date serial
+shows as a number. Both are handled; keep them handled.
+
+Findings carry ids derived from their code, date and cells rather than a
+counter, because the verifier decides them one at a time while edits to the
+distance table re-run every rule.
+
 Two facts live outside the files and are entered by the office — how far each
 site is from the centre, and the signed timecards for work that issues no
 certificates. Both are kept in IndexedDB and reused every month. Never infer

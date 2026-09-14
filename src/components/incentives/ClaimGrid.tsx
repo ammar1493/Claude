@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo } from "react";
 import { SECTION_LABELS } from "@/lib/incentives/timesheet";
-import type { ClaimSection, Finding, SheetReport } from "@/lib/incentives/types";
+import type { CellEdit, ClaimSection, Finding, SheetReport } from "@/lib/incentives/types";
 import { SEVERITY, worstSeverity } from "./severity";
 
 const SECTION_ORDER: ClaimSection[] = ["near", "mid", "far", "perdiem", "admin"];
@@ -20,12 +20,29 @@ export function ClaimGrid({
   report,
   selectedId,
   onSelect,
+  edits = [],
 }: {
   report: SheetReport;
   selectedId: string | null;
   onSelect: (finding: Finding) => void;
+  /** Accepted corrections, drawn onto the grid as the change they will make. */
+  edits?: CellEdit[];
 }) {
   const { sheet } = report;
+
+  /*
+   * The grid doubles as the preview of the corrected sheet: a tick that will
+   * be cleared is struck through, one that will be added shows as a plus. What
+   * comes out of "Generate" is what this grid reads after the corrections.
+   */
+  const pending = useMemo(() => {
+    const map = new Map<string, "clear" | "tick">();
+    for (const e of edits) {
+      if (e.sheet !== "timesheet") continue;
+      map.set(e.cell, e.value === null ? "clear" : "tick");
+    }
+    return map;
+  }, [edits]);
 
   const byCell = useMemo(() => {
     const map = new Map<string, Finding[]>();
@@ -129,14 +146,40 @@ export function ClaimGrid({
                     {days.map((d) => {
                       const cell = `${d.column}${row.rowIndex}`;
                       const ticked = row.days.includes(d.day);
+                      const change = pending.get(cell);
                       const findings = byCell.get(cell) ?? [];
                       const severity = worstSeverity(findings.map((f) => f.severity));
                       const selected = findings.some((f) => f.id === selectedId);
+                      const base =
+                        "mx-auto flex h-5 w-5 items-center justify-center rounded font-bold transition-[scale,box-shadow] duration-150 ease-out";
+
+                      if (change === "tick" && !ticked) {
+                        return (
+                          <td key={d.day} className="border-t border-hairline px-0 py-1">
+                            <span
+                              className={`${base} bg-teal text-white`}
+                              title={`${cell} will be ticked on the corrected sheet`}
+                            >
+                              +
+                            </span>
+                          </td>
+                        );
+                      }
                       if (!ticked) {
                         return <td key={d.day} className="border-t border-hairline px-0 py-1" />;
                       }
-                      const base =
-                        "mx-auto flex h-5 w-5 items-center justify-center rounded font-bold transition-[scale,box-shadow] duration-150 ease-out";
+                      if (change === "clear") {
+                        return (
+                          <td key={d.day} className="border-t border-hairline px-0 py-1">
+                            <span
+                              className={`${base} bg-fog text-slate-ink/60 line-through`}
+                              title={`${cell} will be cleared on the corrected sheet`}
+                            >
+                              ✓
+                            </span>
+                          </td>
+                        );
+                      }
                       if (!severity) {
                         return (
                           <td key={d.day} className="border-t border-hairline px-0 py-1">

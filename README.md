@@ -84,6 +84,40 @@ human — a distance to confirm, a duration that reads short) and **Note**
 (under-claims, unmatched course names). Only priced Must-change findings move
 the verified total; the card says how many are still open.
 
+### Deciding, then correcting
+
+Each finding carries **Apply the fix** / **Keep as claimed**, and says exactly
+which cells its fix would change — *Clear C12; Tick C10 — Half day
+(08:00–12:00)*. Nothing is applied that was not accepted. A finding with no
+mechanical fix — a timecard that contradicts the record sheet, a session number
+nobody can guess — can only be acknowledged, and those stay on the report for
+whoever signs it. A site that still has no distance can be given one from
+inside the finding that asked for it.
+
+The claim grid doubles as the preview: an accepted correction strikes through
+the tick it clears and marks the one it adds, so the grid reads as the
+corrected sheet before anything is generated.
+
+**Generate the corrected sheet** then writes that file. It is the trainer's own
+workbook — same template, same rates, same signature blocks — with only the
+accepted cells rewritten and the totals recalculated. That is not a figure of
+speech: `xlsxEdit.ts` edits the `<c>` elements inside the sheet XML and copies
+every other part of the zip through byte for byte, because reading the workbook
+into a spreadsheet library and writing it back would lose every fill, merge and
+print setting the community build cannot round-trip. Of the 26 parts in a
+typical sheet, three change: the two tabs and `workbook.xml`, which gains
+`fullCalcOnLoad` so Excel recalculates on open.
+
+Optionally the **verification log is rewritten from the record sheet** — one
+line per session actually delivered, with its real session number and the
+duration the course list gives it, plus any timecard days and the continuation
+days of multi-day courses. Off by default: it replaces what the trainer wrote.
+
+Feeding a generated sheet back through the verifier is the test that matters,
+and it is how the rules above were checked: ten of August's eleven come back
+with no errors at all. The eleventh is Ahmed Abubakr, whose timecard and record
+sheet contradict each other — which is the one thing the tool will not decide.
+
 **Getting it out.** The claim grid on screen is the report — a coloured tick is
 a finding, and selecting it opens the wording to send back to the trainer.
 **Findings workbook** downloads Summary / Findings / Day-by-day / Sites /

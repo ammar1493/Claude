@@ -1,29 +1,47 @@
 "use client";
 
-import type { Finding, Severity, SheetReport } from "@/lib/incentives/types";
+import type { ReactNode } from "react";
+
+import type { Decision, Finding, Severity, SheetReport } from "@/lib/incentives/types";
 import { Icon } from "../Icons";
+import { DecisionControls } from "./CorrectionPanel";
 import { SEVERITY, SEVERITY_ORDER } from "./severity";
 
 const sar = (n: number) => `${Math.round(n).toLocaleString("en-US")} SAR`;
+
+/** Finding ids carry file names and cell refs; an element id cannot. */
+export const cssId = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, "_");
 
 function FindingCard({
   finding,
   selected,
   onSelect,
   tabName,
+  decision,
+  onDecide,
+  extra,
 }: {
   finding: Finding;
   selected: boolean;
   onSelect: () => void;
   tabName: string;
+  decision: Decision;
+  onDecide: (decision: Decision) => void;
+  extra?: ReactNode;
 }) {
   const tone = SEVERITY[finding.severity];
+  const decided =
+    decision === "accepted"
+      ? "ring-2 ring-teal"
+      : decision === "kept"
+        ? "opacity-60"
+        : "";
   return (
     <article
-      id={`finding-${finding.id}`}
+      id={`finding-${cssId(finding.id)}`}
       onClick={onSelect}
       className={`surface-card print-block cursor-pointer rounded-xl border-l-4 bg-white px-4 py-3 ${tone.rule} ${
-        selected ? "ring-2 ring-navy" : ""
+        selected ? "ring-2 ring-navy" : decided
       }`}
     >
       <header className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -66,6 +84,8 @@ function FindingCard({
         </div>
       )}
 
+      {extra}
+
       {finding.evidence.length > 0 && (
         <details className="mt-2">
           <summary className="cursor-pointer text-xs font-medium text-navy select-none">
@@ -78,6 +98,8 @@ function FindingCard({
           </ul>
         </details>
       )}
+
+      <DecisionControls finding={finding} decision={decision} onDecide={onDecide} />
     </article>
   );
 }
@@ -87,11 +109,18 @@ export function FindingsList({
   selectedId,
   onSelect,
   filter,
+  decisions,
+  onDecide,
+  renderExtra,
 }: {
   report: SheetReport;
   selectedId: string | null;
   onSelect: (finding: Finding) => void;
   filter: Set<Severity>;
+  decisions: Record<string, Decision>;
+  onDecide: (id: string, decision: Decision) => void;
+  /** Slot for a control a particular finding needs — a distance, say. */
+  renderExtra?: (finding: Finding) => ReactNode;
 }) {
   const shown = report.findings.filter((f) => filter.has(f.severity));
 
@@ -132,6 +161,9 @@ export function FindingsList({
                   finding={f}
                   selected={f.id === selectedId}
                   onSelect={() => onSelect(f)}
+                  decision={decisions[f.id] ?? "pending"}
+                  onDecide={(d) => onDecide(f.id, d)}
+                  extra={renderExtra?.(f)}
                   tabName={
                     f.sheet === "timesheet"
                       ? report.sheet.timeSheetName

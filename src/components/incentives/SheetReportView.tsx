@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Finding, Severity, SheetReport } from "@/lib/incentives/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { buildPlan } from "@/lib/incentives/correct";
+import { siteKey } from "@/lib/incentives/sites";
+import type { Decision, Finding, Severity, SheetReport, SiteDistance } from "@/lib/incentives/types";
 import { Card, SectionTitle } from "../Card";
 import { Icon } from "../Icons";
 import { ClaimGrid } from "./ClaimGrid";
+import { CorrectionPanel } from "./CorrectionPanel";
 import { DayLedger } from "./DayLedger";
-import { FindingsList } from "./FindingsList";
+import { cssId, FindingsList } from "./FindingsList";
 import { SEVERITY, SEVERITY_ORDER } from "./severity";
 import { VerificationLog } from "./VerificationLog";
 
@@ -38,19 +41,55 @@ function Figure({
   );
 }
 
-export function SheetReportView({ report }: { report: SheetReport }) {
+export function SheetReportView({
+  report,
+  original,
+  sites,
+  onSetSite,
+}: {
+  report: SheetReport;
+  /** The uploaded workbook, so a corrected copy can be written from it. */
+  original: ArrayBuffer | null;
+  sites: SiteDistance[];
+  onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<Set<Severity>>(new Set(SEVERITY_ORDER));
+  /*
+   * Decisions are keyed on the finding id, which is derived from what the
+   * finding is about — so setting a distance re-runs the rules without losing
+   * the calls already made on everything else.
+   */
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 
   // A different trainer is a different sheet; keep nothing from the last one.
   useEffect(() => {
     setSelected(null);
+    setDecisions({});
   }, [report.sheet.fileName]);
+
+  const decide = useCallback((id: string, decision: Decision) => {
+    setDecisions((prev) => ({ ...prev, [id]: decision }));
+  }, []);
+
+  const decideMany = useCallback((ids: string[], decision: Decision) => {
+    setDecisions((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = decision;
+      return next;
+    });
+  }, []);
+
+  const accepted = useMemo(
+    () => new Set(report.findings.filter((f) => decisions[f.id] === "accepted").map((f) => f.id)),
+    [report.findings, decisions],
+  );
+  const plan = useMemo(() => buildPlan(report, accepted), [report, accepted]);
 
   const select = (finding: Finding) => {
     setSelected(finding.id);
     document
-      .getElementById(`finding-${finding.id}`)
+      .getElementById(`finding-${cssId(finding.id)}`)
       ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
 
@@ -138,11 +177,18 @@ export function SheetReportView({ report }: { report: SheetReport }) {
           scrolled sideways to be read is no better than the spreadsheet. */}
       <div className="stage stage-3">
         <Card title={`Claim grid — ${report.sheet.timeSheetName}`} tone="marked" inset>
-          <ClaimGrid report={report} selectedId={selected} onSelect={select} />
+          <ClaimGrid report={report} selectedId={selected} onSelect={select} edits={plan.edits} />
           <p className="no-print mt-2 px-2 text-[11px] text-slate-ink">
             <Icon name="info" size={12} className="mr-1 inline align-[-2px]" />
-            Every tick the record sheet backs is navy. Coloured ticks carry a finding — select one to
-            read why.
+            Every tick the record sheet backs is navy; a coloured tick carries a finding — select one
+            to read why.
+            {plan.edits.length > 0 && (
+              <>
+                {" "}
+                A struck-through tick will be cleared and a teal <strong>+</strong> added, so this is
+                the corrected sheet as it will be written.
+              </>
+            )}
           </p>
         </Card>
       </div>
@@ -167,9 +213,84 @@ export function SheetReportView({ report }: { report: SheetReport }) {
 
         <div className="min-w-0 space-y-2 xl:sticky xl:top-[calc(var(--nav-h)+12px)] xl:max-h-[calc(100vh-var(--nav-h)-24px)] xl:self-start xl:overflow-y-auto xl:pe-1 neft-scroll">
           <SectionTitle className="print-block">What has to change</SectionTitle>
-          <FindingsList report={report} selectedId={selected} onSelect={select} filter={filter} />
+          <CorrectionPanel
+            report={report}
+            decisions={decisions}
+            plan={plan}
+            original={original}
+            onDecideMany={decideMany}
+          />
+          <FindingsList
+            report={report}
+            selectedId={selected}
+            onSelect={select}
+            filter={filter}
+            decisions={decisions}
+            onDecide={decide}
+            renderExtra={(finding) =>
+              finding.code === "site-unknown" ? (
+                <SiteQuickSet finding={finding} sites={sites} onSetSite={onSetSite} />
+              ) : null
+            }
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Setting a distance where the question is asked.
+ *
+ * "How far is SANAD?" is answerable in the two seconds it takes to type a
+ * number; sending the verifier to another tab to do it, and back again to find
+ * their place, is not.
+ */
+function SiteQuickSet({
+  finding,
+  sites,
+  onSetSite,
+}: {
+  finding: Finding;
+  sites: SiteDistance[];
+  onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
+}) {
+  // The site's name is the first thing the title asks about.
+  const name = finding.title.replace(/^How far is /, "").replace(/\?$/, "").trim();
+  const site = sites.find((s) => siteKey(s.name) === siteKey(name));
+  const [km, setKm] = useState("");
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="no-print mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-fog px-2.5 py-2"
+    >
+      <label className="text-[11px] font-bold text-navy" htmlFor={`km-${cssId(finding.id)}`}>
+        {name}
+      </label>
+      <input
+        id={`km-${cssId(finding.id)}`}
+        type="number"
+        min={0}
+        value={km}
+        placeholder="km"
+        onChange={(e) => setKm(e.target.value)}
+        onBlur={() => {
+          const n = Number(km.trim());
+          if (km.trim() !== "" && Number.isFinite(n)) onSetSite(name, { kind: "site", km: n });
+        }}
+        className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+      />
+      <button
+        type="button"
+        onClick={() => onSetSite(name, { kind: "rig", km: null })}
+        className={`rounded-md px-2 py-1 text-[11px] font-bold transition-colors duration-150 ${
+          site?.kind === "rig" ? "bg-teal text-white" : "bg-navy-050 text-navy hover:bg-navy hover:text-white"
+        }`}
+      >
+        It is a rig or well
+      </button>
+      <span className="text-[11px] text-slate-ink">Saved for every month after this one.</span>
     </div>
   );
 }

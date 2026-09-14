@@ -7,6 +7,7 @@ import type {
   ClaimSection,
   IncentiveSheet,
   VerificationEntry,
+  VerificationLayout,
 } from "./types";
 
 type Grid = (string | number | boolean | Date | null)[][];
@@ -241,7 +242,9 @@ function parseClaimRows(grid: Grid, layout: GridLayout): { rows: ClaimRow[]; gra
  * The trainer's own verification log
  * ------------------------------------------------------------------ */
 
-function parseVerification(grid: Grid): VerificationEntry[] | null {
+function parseVerification(
+  grid: Grid,
+): { entries: VerificationEntry[]; layout: VerificationLayout } | null {
   let headerRow = -1;
   let dateCol = -1;
   for (let row = 0; row < Math.min(grid.length, 20) && headerRow < 0; row += 1) {
@@ -269,6 +272,16 @@ function parseVerification(grid: Grid): VerificationEntry[] | null {
     else if (/duration/.test(h)) durationCol = c;
   }
 
+  const layout: VerificationLayout = {
+    headerRow: headerRow + 1,
+    dateColumn: XLSX.utils.encode_col(dateCol),
+    courseColumn: XLSX.utils.encode_col(courseCol),
+    locationColumn: XLSX.utils.encode_col(locationCol),
+    sessionColumn: XLSX.utils.encode_col(sessionCol),
+    durationColumn: XLSX.utils.encode_col(durationCol),
+    lastRow: headerRow + 1,
+  };
+
   const entries: VerificationEntry[] = [];
   for (let row = headerRow + 1; row < grid.length; row += 1) {
     const rawDate = cellToString(cellAt(grid, row, dateCol));
@@ -278,6 +291,10 @@ function parseVerification(grid: Grid): VerificationEntry[] | null {
     const durationLabel = text(grid, row, durationCol);
     // Pre-printed date columns run past the last entry; a row is only a claim
     // once the trainer has written something on it.
+    // The pre-printed date column runs past the last entry, so the last row
+    // that matters is the last one with something written on it — that is what
+    // a rebuilt log has to clear down to.
+    if (rawDate || courseName || sessionNo || durationLabel) layout.lastRow = row + 1;
     if (!courseName && !sessionNo && !durationLabel) continue;
     entries.push({
       rowIndex: row + 1,
@@ -290,7 +307,7 @@ function parseVerification(grid: Grid): VerificationEntry[] | null {
       durationDays: parseDurationLabel(durationLabel),
     });
   }
-  return entries;
+  return { entries, layout };
 }
 
 /* ------------------------------------------------------------------ *
@@ -334,6 +351,7 @@ export function parseIncentiveSheet(
   let grid: Grid | null = null;
   let timeSheetName = "";
   let verification: VerificationEntry[] | null = null;
+  let verificationLayout: VerificationLayout | null = null;
   let verificationSheetName: string | null = null;
 
   for (const name of wb.SheetNames) {
@@ -356,9 +374,10 @@ export function parseIncentiveSheet(
       }
     }
     if (!verification) {
-      const entries = parseVerification(g);
-      if (entries) {
-        verification = entries;
+      const found = parseVerification(g);
+      if (found) {
+        verification = found.entries;
+        verificationLayout = found.layout;
         verificationSheetName = name;
       }
     }
@@ -395,6 +414,7 @@ export function parseIncentiveSheet(
     statedGrandTotal,
     grandTotalCell: grandTotalRow >= 0 ? addr(grandTotalRow, layout.totalCol) : "",
     verification: verification ?? [],
+    verificationLayout,
     parseWarnings,
   };
 }

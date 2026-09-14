@@ -1,6 +1,7 @@
 import { CourseCatalog } from "./courses";
 import { matchInstructor } from "./names";
 import { bandForSite, describeSite, SiteTable, siteLabel } from "./sites";
+import { dateToSerial } from "./xlsxEdit";
 import { coverageFor, cardsFor, describeTimecard, parseIsoDate, siteForTimecard, spanDays } from "./timecards";
 import {
   addDays,
@@ -12,6 +13,7 @@ import {
 } from "./record";
 import { KIND_LABELS, SECTION_LABELS } from "./timesheet";
 import type {
+  CellEdit,
   ClaimKind,
   ClaimSection,
   CourseDuration,
@@ -124,10 +126,19 @@ function suggestedSarFor(sheet: IncentiveSheet, weekday: number, days: number): 
 
 /* ------------------------------------------------------------------ */
 
-let counter = 0;
-function makeFinding(f: Omit<Finding, "id">): Finding {
-  counter += 1;
-  return { id: `f${counter}`, ...f };
+/**
+ * Finding ids are derived from what the finding is about, not from the order
+ * it was raised in.
+ *
+ * A verifier works through a sheet deciding each correction, and setting a
+ * distance half way through re-runs every rule. With a counter for an id every
+ * decision made so far would attach to the wrong finding, or to none; keyed on
+ * the code, the date and the cells, a finding that is still the same finding
+ * keeps the same id.
+ */
+function findingKey(f: Omit<Finding, "id" | "fix">, fileName: string): string {
+  const date = f.date ? dayKey(f.date) : "-";
+  return `${fileName}|${f.code}|${date}|${f.sheet}|${f.cells.join(",")}`;
 }
 
 export interface VerifyOptions {
@@ -150,6 +161,17 @@ export function verifySheet(
   const month = options?.month ?? record.month;
   const sites = options?.sites ?? new SiteTable([]);
   const timecards = options?.timecards ?? [];
+
+  const usedIds = new Map<string, number>();
+  /** `fix` defaults to null: a finding is only applicable when it says so. */
+  const makeFinding = (
+    f: Omit<Finding, "id" | "fix"> & { fix?: CellEdit[] | null },
+  ): Finding => {
+    const key = findingKey(f, sheet.fileName);
+    const seen = usedIds.get(key) ?? 0;
+    usedIds.set(key, seen + 1);
+    return { id: seen ? `${key}#${seen}` : key, fix: null, ...f };
+  };
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const findings: Finding[] = [];
 
@@ -359,6 +381,72 @@ export function verifySheet(
     return { band, sites: seen, unpriced };
   }
 
+  /*
+   * Turning a correction into cells.
+   *
+   * Saying "claim half a day instead" is only half an answer; the other half
+   * is which box to tick. These find the cell for a rate line on a date, so a
+   * finding can carry the edit that puts the sheet right and the corrected
+   * workbook can be written from the trainer's own file.
+   */
+  const columnForDay = new Map<number, string>();
+  for (const d of sheet.dayColumns) {
+    if (!d.nextMonth && !columnForDay.has(d.day)) columnForDay.set(d.day, d.column);
+  }
+
+  const rowFor = (section: ClaimSection, kind: ClaimKind): ClaimRow | null =>
+    sheet.rows.find((r) => r.section === section && r.kind === kind) ?? null;
+
+  const cellFor = (section: ClaimSection, kind: ClaimKind, day: number): string | null => {
+    const row = rowFor(section, kind);
+    const column = columnForDay.get(day);
+    return row && column ? `${column}${row.rowIndex}` : null;
+  };
+
+  /** The rate line a day of this size, on this weekday, belongs on. */
+  const targetKind = (section: ClaimSection, weekday: number, days: number): ClaimKind | null => {
+    if (days <= 0) return null;
+    if (section === "near") {
+      const { half, full } = expectedKinds(weekday);
+      return days <= 0.5 ? half : full;
+    }
+    return weekday === FRIDAY && rowFor(section, "friday") ? "friday" : "daily";
+  };
+
+  const clearEdits = (cells: string[]): CellEdit[] =>
+    cells.map((cell) => ({
+      sheet: "timesheet" as const,
+      cell,
+      value: null,
+      describe: `Clear ${cell}`,
+    }));
+
+  /**
+   * Move a day onto the line it belongs on: clear what is ticked, tick the
+   * right box. Returns null when the right box cannot be located, so the
+   * finding stays advisory rather than applying a half-correction.
+   */
+  const retickEdits = (
+    cells: string[],
+    section: ClaimSection,
+    weekday: number,
+    days: number,
+    day: number,
+  ): CellEdit[] | null => {
+    const kind = targetKind(section, weekday, days);
+    if (!kind) return clearEdits(cells);
+    const target = cellFor(section, kind, day);
+    if (!target) return null;
+    const edits = clearEdits(cells.filter((c) => c !== target));
+    edits.push({
+      sheet: "timesheet",
+      cell: target,
+      value: 1,
+      describe: `Tick ${target} — ${KIND_LABELS[kind]}`,
+    });
+    return edits;
+  };
+
   /* ---------------- collect the claims by date ---------------- */
 
   interface Claim {
@@ -392,6 +480,7 @@ export function verifySheet(
           title: `Day ${c.day} does not exist in ${record.monthLabel}`,
           why: `${record.monthLabel} has ${daysInMonth} days, so the tick in ${c.cell} on "${c.row.label.trim()}" cannot be a working day. Remove it.`,
           suggestion: "Remove the tick.",
+          fix: clearEdits([c.cell]),
           sheet: "timesheet",
           cells: [c.cell],
           date: null,
@@ -411,6 +500,7 @@ export function verifySheet(
           title: "Claim sits in the next month's column",
           why: `${c.cell} is the trailing column for the 1st of the following month, not a day of ${record.monthLabel}. Move it onto next month's sheet, or onto the right day of this one.`,
           suggestion: "Move the tick to the correct month.",
+          fix: clearEdits([c.cell]),
           sheet: "timesheet",
           cells: [c.cell],
           date: dateOf(c),
@@ -452,7 +542,10 @@ export function verifySheet(
     report.claimedSar += c.row.rate;
   }
 
-  const addDayFinding = (report: DayReport, f: Omit<Finding, "id">) => {
+  const addDayFinding = (
+    report: DayReport,
+    f: Omit<Finding, "id" | "fix"> & { fix?: CellEdit[] | null },
+  ) => {
     const finding = makeFinding(f);
     findings.push(finding);
     report.findingIds.push(finding.id);
@@ -495,6 +588,7 @@ export function verifySheet(
         title: `Wrong rate line for a ${dayName}`,
         why: `${why} Move this tick to "${KIND_LABELS[rightKind]}"${rightRate !== null ? ` at ${sar(rightRate)}` : ""}.`,
         suggestion: `Move to "${KIND_LABELS[rightKind]}".`,
+        fix: retickEdits([cell], "near", weekday, row.dayValue, date.getDate()),
         sheet: "timesheet",
         cells: [cell],
         date,
@@ -582,6 +676,7 @@ export function verifySheet(
             ? `${fmtDate(date)} is claimed as a travelling/standby day. Travel issues no certificates, so the record sheet cannot confirm it — attach the trip approval before paying it.`
             : `The record sheet has no session for ${matchedInstructor ?? sheet.instructorName} on ${fmtDate(date)}, so there is nothing to support ${sar(report.claimedSar)} of claim. Remove the tick, or have the missing session filed in the record sheet first.`,
           suggestion: onlyTravel ? "Attach supporting approval." : "Remove the claim for this date.",
+          fix: onlyTravel ? null : clearEdits(cells),
           sheet: "timesheet",
           cells,
           date,
@@ -653,6 +748,13 @@ export function verifySheet(
           `Change it to "${KIND_LABELS[supportedDays <= 0.5 ? expectedKinds(weekday).half : expectedKinds(weekday).full]}"` +
           (suggested !== null ? `, ${sar(suggested)} instead of ${sar(claimedSar)}.` : "."),
         suggestion: `Claim ${fmtDays(supportedDays)} for this date.`,
+        fix: retickEdits(
+          teachingClaims.map((c) => c.cell),
+          claimedBand ?? "near",
+          weekday,
+          supportedDays,
+          date.getDate(),
+        ),
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),
         date,
@@ -670,6 +772,13 @@ export function verifySheet(
         title: `${fmtDays(rec.load)} delivered, ${fmtDays(claimedTeaching)} claimed`,
         why: `The record sheet shows ${fmtDays(rec.load)} of teaching on ${fmtDate(date)} (${rec.blocks.map((b) => b.courseNames.join(" + ")).join("; ")}) but the sheet claims only ${fmtDays(claimedTeaching)}. Under-claimed — confirm with the trainer before paying the lower figure.`,
         suggestion: suggested === null ? null : `Claim ${fmtDays(rec.load)}, ${sar(suggested)}.`,
+        fix: retickEdits(
+          teachingClaims.map((c) => c.cell),
+          claimedBand ?? "near",
+          weekday,
+          rec.load,
+          date.getDate(),
+        ),
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),
         date,
@@ -709,6 +818,13 @@ export function verifySheet(
             ? `Move it to that band — ${sar(suggested)} instead of ${sar(claimedSar)}.`
             : `Move it to that band.`),
         suggestion: `Move to the ${SECTION_LABELS[expectedBand]} band.`,
+        fix: retickEdits(
+          teachingClaims.map((c) => c.cell),
+          expectedBand,
+          weekday,
+          expectedBand === "near" ? supportedDays : 1,
+          date.getDate(),
+        ),
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),
         date,
@@ -822,6 +938,12 @@ export function verifySheet(
         title: "Timecard day not claimed",
         why: `A signed timecard covers ${fmtDate(date)} (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}) but the sheet claims nothing for it. Check whether the trainer missed the day.`,
         suggestion: rate === null ? null : `Add a ${SECTION_LABELS[band!]} day, ${sar(rate)}.`,
+        // Same reasoning as the record-sheet side: a day both sources claim
+        // is settled by a person, not by adding another tick to it.
+        fix:
+          band && !dayReport.record?.blocks.length && !dayReport.record?.continuations.length
+            ? retickEdits([], band, date.getDay(), 1, date.getDate())
+            : null,
         sheet: "timesheet",
         cells: [],
         date,
@@ -846,6 +968,11 @@ export function verifySheet(
         title: "Delivered but not claimed",
         why: `The record sheet shows ${fmtDays(rec.load)} of teaching on ${fmtDate(rec.date)} (${[...rec.blocks, ...rec.continuations].map((b) => b.courseNames.join(" + ")).join("; ")}) with nothing claimed for it. Check whether the trainer missed a day.`,
         suggestion: `Add ${fmtDays(rec.load)} for ${fmtDate(rec.date)} if it is owed.`,
+        // Adding a claim to a day a timecard also covers would build a sheet
+        // that contradicts itself; that day needs the conflict settled first.
+        fix: dayReport.covers.length
+          ? null
+          : retickEdits([], dayReport.expectedBand ?? "near", rec.date.getDay(), rec.load, rec.date.getDate()),
         sheet: "timesheet",
         cells: [],
         date: rec.date,
@@ -872,6 +999,7 @@ export function verifySheet(
           title: "More per-diem days than distance days",
           why: `"${row.label.trim()}" is claimed on ${row.days.length} day${row.days.length === 1 ? "" : "s"}, but only ${distanceDayCount} day${distanceDayCount === 1 ? " is" : "s are"} claimed under a distance band. Per diem only applies to trainings over 150 km — trim it to the days that qualify.`,
           suggestion: `Claim at most ${distanceDayCount} per-diem day${distanceDayCount === 1 ? "" : "s"}.`,
+          fix: clearEdits(row.cells.slice(distanceDayCount)),
           sheet: "timesheet",
           cells: row.cells,
           date: null,
@@ -1011,6 +1139,16 @@ export function verifySheet(
           suggestion: looksSwapped
             ? `Re-date to ${swapped.toLocaleDateString("en-GB")}.`
             : `Re-date to ${record.monthLabel}, or remove.`,
+          fix: looksSwapped
+            ? [
+                {
+                  sheet: "verification",
+                  cell: `A${entry.rowIndex}`,
+                  value: dateToSerial(swapped),
+                  describe: `Set A${entry.rowIndex} to ${swapped.toLocaleDateString("en-GB")}`,
+                },
+              ]
+            : null,
           sheet: "verification",
           cells: [`A${entry.rowIndex}`],
           date: entry.date,
@@ -1073,6 +1211,14 @@ export function verifySheet(
                 : `Either the session ran short of its listed duration and the reason belongs on the line, or the duration is mistyped.`
             }`,
             suggestion: `Write "${course.label}".`,
+            fix: [
+              {
+                sheet: "verification",
+                cell: `E${entry.rowIndex}`,
+                value: course.label,
+                describe: `Set E${entry.rowIndex} to "${course.label}"`,
+              },
+            ],
             sheet: "verification",
             cells,
             date: entry.date,
@@ -1220,6 +1366,10 @@ export function verifySheet(
     const report = dayReports.get(key);
     const claimed = report?.claimedDays ?? 0;
     if (Math.abs(Math.min(logged, 1) - claimed) < 0.001) continue;
+    // A distance band pays a whole day for a half-day course at a rig, so the
+    // grid legitimately reads higher than the log there; band-day already
+    // says so, and saying it twice in opposite words helps nobody.
+    if (report?.claims.some((c) => c.row.section === "mid" || c.row.section === "far")) continue;
     const date = report?.date ?? new Date(`${key}T00:00:00`);
     const f = makeFinding({
       severity: logged < claimed ? "error" : "info",
