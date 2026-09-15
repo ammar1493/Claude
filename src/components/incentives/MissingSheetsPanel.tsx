@@ -98,7 +98,8 @@ export function MissingSheetsPanel({
         <Card tone="plain">
           <p className="py-6 text-center text-sm text-slate-ink">
             <Icon name="check-circle" size={16} className="me-1 inline align-[-3px] text-teal" />
-            Every trainer with sessions in {monthLabel || "this month"} has sent a sheet.
+            Every trainer with sessions in {monthLabel || "this month"} now has a sheet in this
+            month — sent by them, or drafted here.
           </p>
         </Card>
       ) : (
@@ -277,7 +278,11 @@ export function MissingSheetsPanel({
           {days(done.reduce((s, g) => s + g.dayValue, 0))} days across{" "}
           {done.reduce((s, g) => s + g.days, 0)} dated entries,{" "}
           {sar(done.reduce((s, g) => s + g.total, 0))} SAR in total. Each one is the record sheet turned into a claim — check it against what the
-          trainer says before it is signed.
+          trainer says before it is signed.{" "}
+          <span className="font-medium text-navy">
+            Each has joined the month with its own tab above and is verified, corrected and paid
+            exactly like a sheet a trainer sent.
+          </span>
           {done.some((g) => g.notes.length > 0) && (
             <ul className="mt-2 space-y-0.5 border-l border-hairline ps-3 text-[11px]">
               {done.flatMap((g) =>

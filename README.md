@@ -25,7 +25,7 @@ using the same aggregation rules so the numbers match.
 ## Incentive verification
 
 `/incentives` checks the time sheets trainers submit for their monthly
-incentive against what they actually taught. It takes three files, all read in
+incentive against what they actually taught. It takes four files, all read in
 the browser:
 
 | File | What it is |
@@ -33,9 +33,10 @@ the browser:
 | Record sheet | The month's certificate export — `CertNo`, `StudentName`, `ClientName`, `InstructorName`, `PrintedCourseName`, `IssuedOn`, `Location`, `SessionNo`, `RigNo`. Evidence that a session ran. |
 | Courses Duration | `Course Name` / `Duration`, where duration is `Half Day`, `1 Full Day` or `N Days`. |
 | Incentive sheets | The trainers' workbooks — a `.zip` of them, or the `.xlsx` files. Each has a claim grid (rate lines down, days of the month across) and a verification log (one line per session). |
+| Incentives letter | Last month's *Monthly Incentives — Instructors* letter, in Word. Optional, and only needed at the end: it is the template the month's letter is written on. |
 
-Two reference tables fill the gaps those three leave, and both are kept between
-visits so they only get built once:
+Two reference tables fill the gaps the first three leave, and both are kept
+between visits so they only get built once:
 
 | Table | What it settles |
 | --- | --- |
@@ -69,6 +70,13 @@ A draft is a draft — what the record sheet says is owed, not what the trainer
 claims, and the two differ over a travelling day, a per diem, a class the
 certificates do not show. The file name says `drafted`; send it to be checked
 and signed, never straight to payroll.
+
+**A draft then joins the month as a sheet.** It is stored beside the uploads,
+gets its own trainer tab, and is verified, corrected and paid exactly like one
+that arrived by email — the summary row marks it `drafted` and nothing else
+about it is different. That is the point: a month is only checked once every
+trainer in the record sheet has a sheet in it. Deleting a draft puts its
+trainer straight back on **Not received**.
 
 Each claimed day is priced against the sessions that instructor delivered that
 day, and the report names the cell, says why it has to change, and what it
@@ -110,7 +118,10 @@ interesting ones are:
 Findings are graded **Must change** (a claim that is wrong), **Check** (needs a
 human — a distance to confirm, a duration that reads short) and **Note**
 (under-claims, unmatched course names). Only priced Must-change findings move
-the verified total; the card says how many are still open.
+the verified total; the card says how many are still open. A finding with no
+fix to apply is a note to read, not a decision owed, so the month-level
+**To rule on** count leaves it out — a count that cannot be cleared by reading
+is a count that gets cleared without reading.
 
 ### Deciding, then correcting
 
@@ -145,6 +156,25 @@ Feeding a generated sheet back through the verifier is the test that matters,
 and it is how the rules above were checked: ten of August's eleven come back
 with no errors at all, and so do all twelve of the drafted ones. The eleventh is Ahmed Abubakr, whose timecard and record
 sheet contradict each other — which is the one thing the tool will not decide.
+
+### The month's letter
+
+Once every sheet has been ruled on, **Monthly Incentives (.docx)** writes the
+letter finance signs: one numbered row per trainer, the figure their corrected
+sheet pays, and the total. It is written the same way the corrected workbooks
+are — the office's own document with its table rows replaced, so the
+letterhead, the three signature blocks, the table's fills and the page setup
+come through untouched. Of the 15 parts in the template, one changes:
+`word/document.xml`.
+
+The figure in each row is what the sheet **will pay**, not what it claimed and
+not what the rules alone verified: a correction only counts once somebody has
+accepted it. So the summary carries a **To rule on** count per sheet, and the
+letter's banner says how many corrections are still unruled and that those
+sheets go in at what the trainer claimed. A row that pays more than the record
+sheet backs is shown in gold rather than teal for the same reason. Drafted
+sheets are in the letter like any other — a trainer who sent nothing is still
+owed their month.
 
 **Getting it out.** The claim grid on screen is the report — a coloured tick is
 a finding, and selecting it opens the wording to send back to the trainer.

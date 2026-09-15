@@ -21,9 +21,22 @@ export interface StoredWorkbook {
    */
   id: string;
   name: string;
-  kind: "dataset" | "qiddiya" | "record" | "courses" | "incentive" | "attachment";
+  kind:
+    | "dataset"
+    | "qiddiya"
+    | "record"
+    | "courses"
+    | "incentive"
+    | "attachment"
+    | "lettertemplate";
   savedAt: number;
   data: ArrayBuffer;
+  /**
+   * Set on an incentive sheet the app drafted rather than one a trainer sent.
+   * It is checked and corrected like any other, but the page never lets the
+   * two be confused.
+   */
+  drafted?: boolean;
 }
 
 function openDB(): Promise<IDBDatabase> {

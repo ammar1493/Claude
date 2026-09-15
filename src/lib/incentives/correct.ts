@@ -99,6 +99,19 @@ export function previewRows(
   });
 }
 
+/**
+ * What the sheet comes to once the accepted corrections are made.
+ *
+ * Not the claimed total, which still carries the mistakes, and not the
+ * verified total, which prices every finding whether or not a person agreed
+ * with it — this is the figure the corrected workbook will show, and so the
+ * figure the month's incentive letter should carry.
+ */
+export function payableTotal(report: SheetReport, accepted: Set<string>): number {
+  const plan = buildPlan(report, accepted);
+  return previewRows(report, plan).reduce((sum, r) => sum + r.total, 0);
+}
+
 export interface CorrectOptions {
   /**
    * Replace the verification log with what the record sheet and the timecards

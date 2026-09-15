@@ -42,6 +42,19 @@ row numbers, and dates, names, session numbers and durations all arrive in
 several spellings. Before changing a parsing rule, check it against every sheet
 in a month rather than the one that prompted the change.
 
+The month's letter (`summaryDoc.ts`) is written the same way: the office's own
+`.docx` with its table rows replaced, one part of the zip changed. Its first
+data row is the prototype every row is cloned from and its last row is the
+total, so a template whose table has fewer than three rows is refused rather
+than guessed at. Clone through `stripIds()` — Word's `w14:paraId` must be
+unique per paragraph in a document.
+
+The figure that goes in the letter is what a sheet pays once its **accepted**
+corrections are applied (`payableTotal`), which for an unruled finding is what
+the trainer claimed. Anything that presents that number must say so; the
+month-level "to rule on" count is findings with a fix, because a note with
+nothing to apply is not a decision anyone owes.
+
 The corrected workbook is written by editing the original file's XML in place
 (`xlsxEdit.ts`), never by re-serialising it through SheetJS — the community
 build cannot round-trip fills, merges or print settings, so a rebuilt workbook
@@ -60,6 +73,12 @@ bundle is ASCII-only, so a new regex with a non-ASCII range must be built from
 a string (see `names.ts`), and a file download must go through
 `saveFile()` rather than its own anchor, because the artifact viewer's sandbox
 makes anchors inert.
+
+A drafted sheet is stored and verified exactly like an uploaded one — same
+IndexedDB store, own trainer tab, own findings, in the letter — and carries
+`drafted: true` only so the page can label it. Keep it that way: the month is
+finished when every trainer in the record sheet has a sheet, and a draft the
+verifier cannot check is not one.
 
 Sheets are also drafted for trainers who sent none (`generate.ts`), on the
 template another trainer submitted — which is wiped of its ticks, initials and

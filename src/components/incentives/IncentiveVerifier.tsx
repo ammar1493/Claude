@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
+import { payableTotal } from "@/lib/incentives/correct";
+import { saveFile } from "@/lib/incentives/download";
 import { downloadFindingsWorkbook } from "@/lib/incentives/export";
 import {
   buildGeneratedWorkbook,
@@ -11,8 +13,15 @@ import {
 } from "@/lib/incentives/generate";
 import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
 import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
+import { buildSummaryDoc, describeSummaryTemplate } from "@/lib/incentives/summaryDoc";
 import { parseIncentiveSheet } from "@/lib/incentives/timesheet";
-import type { IncentiveSheet, SiteDistance, SheetReport, Timecard } from "@/lib/incentives/types";
+import type {
+  Decision,
+  IncentiveSheet,
+  SiteDistance,
+  SheetReport,
+  Timecard,
+} from "@/lib/incentives/types";
 import { verifySheet } from "@/lib/incentives/verify";
 import { baseName, readZip, spreadsheetEntries } from "@/lib/incentives/zip";
 import {
@@ -41,6 +50,8 @@ const MISSING_TAB = -4;
 interface StoredFile {
   name: string;
   data: ArrayBuffer;
+  /** True when the app drafted this sheet rather than a trainer sending it. */
+  drafted?: boolean;
 }
 
 const sar = (n: number) => Math.round(n).toLocaleString("en-US");
@@ -60,6 +71,14 @@ export function IncentiveVerifier() {
   const [sites, setSites] = useState<SiteDistance[]>([]);
   const [timecards, setTimecards] = useState<Timecard[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
+  /*
+   * Every decision a verifier has made this month, keyed on the finding id.
+   * Held here so the work survives moving between trainers, and written to
+   * IndexedDB so it survives closing the tab — a month of sheets is more than
+   * one sitting.
+   */
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [letterTemplate, setLetterTemplate] = useState<StoredFile | null>(null);
   const [templateName, setTemplateName] = useState<string | null>(null);
 
   /* The three workbooks stay in the browser between visits — the record sheet
@@ -68,25 +87,38 @@ export function IncentiveVerifier() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [rec, cou, all, savedSites, savedCards, savedExcluded] = await Promise.all([
+      const [
+        rec,
+        cou,
+        all,
+        savedSites,
+        savedCards,
+        savedExcluded,
+        savedDecisions,
+        savedLetter,
+      ] = await Promise.all([
         getWorkbook("record"),
         getWorkbook("courses"),
         listWorkbooks("incentive"),
         getSetting<SiteDistance[]>("incentive:sites"),
         getSetting<Timecard[]>("incentive:timecards"),
         getSetting<string[]>("incentive:excluded"),
+        getSetting<Record<string, Decision>>("incentive:decisions"),
+        getWorkbook("lettertemplate"),
       ]);
       if (cancelled) return;
       if (savedSites?.length) setSites(savedSites);
       if (savedCards?.length) setTimecards(savedCards);
       if (savedExcluded?.length) setExcluded(savedExcluded);
+      if (savedDecisions) setDecisions(savedDecisions);
+      if (savedLetter) setLetterTemplate({ name: savedLetter.name, data: savedLetter.data });
       if (rec) setRecord({ name: rec.name, data: rec.data });
       if (cou) setCourses({ name: cou.name, data: cou.data });
       if (all.length) {
         setSheets(
           all
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map((w) => ({ name: w.name, data: w.data })),
+            .map((w) => ({ name: w.name, data: w.data, drafted: w.drafted })),
         );
       }
       setRestored(true);
@@ -165,10 +197,23 @@ export function IncentiveVerifier() {
   const failures = parsedSheets.failures;
 
   /* Whose sheet never arrived, and what the record sheet says they are owed. */
+  const draftedNames = useMemo(
+    () => new Set(sheets.filter((f) => f.drafted).map((f) => f.name)),
+    [sheets],
+  );
+
+  const draftedCount = draftedNames.size;
+
+  /* A sheet a trainer actually sent is the better template to copy. */
   const template = useMemo(() => {
     const byName = parsedSheets.parsed.find((p) => p.fileName === templateName);
-    return byName ?? parsedSheets.parsed[0] ?? null;
-  }, [parsedSheets.parsed, templateName]);
+    if (byName) return byName;
+    return (
+      parsedSheets.parsed.find((p) => !draftedNames.has(p.fileName)) ??
+      parsedSheets.parsed[0] ??
+      null
+    );
+  }, [parsedSheets.parsed, templateName, draftedNames]);
 
   const missing = useMemo(() => {
     const rec = parsedRecord.value;
@@ -180,6 +225,13 @@ export function IncentiveVerifier() {
     return findMissingInstructors(rec, cat, submitted, timecards, siteTable, template, excluded);
   }, [parsedRecord.value, parsedCourses.value, reports, timecards, siteTable, template, excluded]);
 
+  /*
+   * A drafted sheet joins the month as a sheet.
+   *
+   * It is checked, corrected and paid exactly like one a trainer sent — the
+   * whole point is that the month is complete — so it goes into the same store
+   * the uploads live in and picks up its own tab. Only the label differs.
+   */
   const generateSheets = useCallback(
     async (names: string[]): Promise<GeneratedSheet[]> => {
       const rec = parsedRecord.value;
@@ -187,16 +239,54 @@ export function IncentiveVerifier() {
       if (!rec || !cat || !template) return [];
       const file = sheets.find((f) => f.name === template.fileName);
       if (!file) throw new Error("The template workbook is no longer in this browser.");
+
       const out: GeneratedSheet[] = [];
       for (const name of names) {
         out.push(
           await buildGeneratedWorkbook(file.data, template, name, rec, cat, siteTable, timecards),
         );
       }
+
+      const added: StoredFile[] = [];
+      for (const g of out) {
+        const data = g.data.slice().buffer as ArrayBuffer;
+        await putWorkbook({
+          id: `incentive:${g.fileName}`,
+          name: g.fileName,
+          kind: "incentive",
+          savedAt: Date.now(),
+          data,
+          drafted: true,
+        });
+        added.push({ name: g.fileName, data, drafted: true });
+      }
+      setSheets((prev) => {
+        const merged = new Map(prev.map((p) => [p.name, p]));
+        for (const f of added) merged.set(f.name, f);
+        return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+      });
+
       return out;
     },
     [parsedRecord.value, parsedCourses.value, template, sheets, siteTable, timecards],
   );
+
+  const decide = useCallback((id: string, decision: Decision) => {
+    setDecisions((prev) => {
+      const next = { ...prev, [id]: decision };
+      void putSetting("incentive:decisions", next);
+      return next;
+    });
+  }, []);
+
+  const decideMany = useCallback((ids: string[], decision: Decision) => {
+    setDecisions((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = decision;
+      void putSetting("incentive:decisions", next);
+      return next;
+    });
+  }, []);
 
   const setExclusion = useCallback((name: string, exclude: boolean) => {
     setExcluded((prev) => {
@@ -279,6 +369,31 @@ export function IncentiveVerifier() {
     [],
   );
 
+  const acceptLetterTemplate = useCallback(async (files: File[]) => {
+    const file = files[0];
+    if (!file) return;
+    setError(null);
+    setBusy("letter");
+    try {
+      const data = await file.arrayBuffer();
+      // Refused now rather than at the end of the month: a template with no
+      // table to fill in cannot become a letter.
+      await describeSummaryTemplate(data);
+      await putWorkbook({
+        id: "lettertemplate",
+        name: file.name,
+        kind: "lettertemplate",
+        savedAt: Date.now(),
+        data,
+      });
+      setLetterTemplate({ name: file.name, data });
+    } catch (e) {
+      setError(`${file.name}: ${(e as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }, []);
+
   const acceptSheets = useCallback(async (files: File[]) => {
     if (!files.length) return;
     setError(null);
@@ -338,18 +453,83 @@ export function IncentiveVerifier() {
     setActive(-1);
   }, []);
 
+  const monthLabel = parsedRecord.value?.monthLabel ?? "";
+
+  const accepted = useMemo(
+    () => new Set(Object.entries(decisions).filter(([, d]) => d === "accepted").map(([id]) => id)),
+    [decisions],
+  );
+
+  /** Per sheet: what it will pay once the accepted corrections are made. */
+  const payable = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of reports) map.set(r.sheet.fileName, payableTotal(r, accepted));
+    return map;
+  }, [reports, accepted]);
+
+  /*
+   * Sheets still carrying a finding that would change what is paid.
+   *
+   * Only a finding with a fix counts: accepting it rewrites a cell and moves
+   * the figure, so it is a decision somebody owes. A note with nothing to
+   * apply \u2014 a session number to look up, a band the rules explain \u2014 changes
+   * the same money whether it is read or not, and holding the month's letter
+   * on it would train the verifier to clear the count without reading.
+   */
+  const undecided = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of reports) {
+      map.set(
+        r.sheet.fileName,
+        r.findings.filter(
+          (f) => f.fix && f.fix.length && (decisions[f.id] ?? "pending") === "pending",
+        ).length,
+      );
+    }
+    return map;
+  }, [reports, decisions]);
+
+  const openQuestions = [...undecided.values()].reduce((a, b) => a + b, 0);
+
+  const makeLetter = useCallback(async () => {
+    if (!letterTemplate) return;
+    setBusy("letter-out");
+    setError(null);
+    try {
+      const rows = reports
+        .map((r) => ({
+          name: r.sheet.instructorName || r.matchedInstructor || r.sheet.fileName,
+          amount: payable.get(r.sheet.fileName) ?? r.computedTotal,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+      const out = await buildSummaryDoc(letterTemplate.data, rows, monthLabel || "");
+      await saveFile(
+        out.fileName,
+        new Blob([out.data as BlobPart], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }, [letterTemplate, reports, payable, monthLabel]);
+
   const totals = useMemo(() => {
     const claimed = reports.reduce((s, r) => s + r.claimedTotal, 0);
-    const verified = reports.reduce((s, r) => s + r.verifiedTotal, 0);
+    const verified = reports.reduce(
+      (s, r) => s + (payable.get(r.sheet.fileName) ?? r.verifiedTotal),
+      0,
+    );
     return {
       claimed,
       verified,
       errors: reports.reduce((s, r) => s + r.errorCount, 0),
       warnings: reports.reduce((s, r) => s + r.warningCount, 0),
     };
-  }, [reports]);
+  }, [reports, payable]);
 
-  const monthLabel = parsedRecord.value?.monthLabel ?? "";
   const ready = Boolean(parsedRecord.value && parsedCourses.value);
 
   return (
@@ -379,6 +559,27 @@ export function IncentiveVerifier() {
                   <Icon name="download" size={14} />
                   Findings workbook
                 </button>
+                {letterTemplate && (
+                  <button
+                    type="button"
+                    onClick={() => void makeLetter()}
+                    disabled={busy === "letter-out"}
+                    title={
+                      openQuestions > 0
+                        ? `${openQuestions} correction${openQuestions === 1 ? " has" : "s have"} not been ruled on, so ${openQuestions === 1 ? "it leaves" : "they leave"} the trainer's claim standing in the letter.`
+                        : "Every finding has been decided."
+                    }
+                    className="flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-bold text-white transition-[filter,scale] duration-150 ease-out hover:brightness-110 active:scale-[0.96] disabled:opacity-50"
+                  >
+                    <Icon name="document" size={14} />
+                    Monthly Incentives
+                    {openQuestions > 0 && (
+                      <span className="rounded bg-white/20 px-1 text-[10px] font-bold">
+                        {openQuestions}
+                      </span>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -415,7 +616,7 @@ export function IncentiveVerifier() {
           </div>
         )}
 
-        <section className="no-print grid gap-3 lg:grid-cols-3">
+        <section className="no-print grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FileSlot
             title="Record sheet"
             hint="The month's certificate export — who taught what, when and where. This is the evidence every claim is checked against."
@@ -478,7 +679,32 @@ export function IncentiveVerifier() {
               <p className="text-xs text-slate-ink">
                 <span className="font-bold text-navy">{sheets.length}</span> sheet
                 {sheets.length === 1 ? "" : "s"} loaded
+                {draftedCount > 0 ? ` · ${draftedCount} drafted here` : ""}
                 {failures.length ? ` · ${failures.length} could not be read` : ""}
+              </p>
+            )}
+          </FileSlot>
+
+          <FileSlot
+            title="Incentives letter"
+            hint="Last month's Monthly Incentives letter, in Word. Its own table, colours and signature block are reused — only the names and figures change."
+            icon="document"
+            accept=".docx"
+            loaded={Boolean(letterTemplate)}
+            busy={busy === "letter"}
+            onFiles={(f) => void acceptLetterTemplate(f)}
+            onClear={() => {
+              void deleteWorkbook("lettertemplate");
+              setLetterTemplate(null);
+            }}
+          >
+            {letterTemplate && (
+              <p className="text-xs leading-relaxed text-slate-ink">
+                <span className="font-bold text-navy">{letterTemplate.name}</span>
+                <br />
+                {reports.length > 0
+                  ? `${reports.length} row${reports.length === 1 ? "" : "s"} to write`
+                  : "Waiting for the sheets"}
               </p>
             )}
           </FileSlot>
@@ -619,6 +845,12 @@ export function IncentiveVerifier() {
                 monthLabel={monthLabel}
                 unpricedSites={unpricedSites.length}
                 missingCount={missing.length}
+                drafted={draftedNames}
+                payable={payable}
+                undecided={undecided}
+                letterReady={Boolean(letterTemplate)}
+                openQuestions={openQuestions}
+                onLetter={() => void makeLetter()}
                 onOpen={setActive}
                 onOpenSites={() => setActive(SITES_TAB)}
                 onOpenMissing={() => setActive(MISSING_TAB)}
@@ -657,6 +889,9 @@ export function IncentiveVerifier() {
                   sheets.find((f) => f.name === reports[active].sheet.fileName)?.data ?? null
                 }
                 sites={sites}
+                decisions={decisions}
+                onDecide={decide}
+                onDecideMany={decideMany}
                 onSetSite={setSite}
               />
             )}
@@ -673,6 +908,12 @@ function SummaryTable({
   monthLabel,
   unpricedSites,
   missingCount,
+  drafted,
+  payable,
+  undecided,
+  letterReady,
+  openQuestions,
+  onLetter,
   onOpen,
   onOpenSites,
   onOpenMissing,
@@ -683,6 +924,15 @@ function SummaryTable({
   monthLabel: string;
   unpricedSites: number;
   missingCount: number;
+  /** File names the app drafted, so a row can say so. */
+  drafted: Set<string>;
+  /** Per file: what the sheet pays once the accepted corrections are made. */
+  payable: Map<string, number>;
+  /** Per file: findings nobody has ruled on yet. */
+  undecided: Map<string, number>;
+  letterReady: boolean;
+  openQuestions: number;
+  onLetter: () => void;
   onOpen: (index: number) => void;
   onOpenSites: () => void;
   onOpenMissing: () => void;
@@ -691,6 +941,44 @@ function SummaryTable({
   const difference = totals.verified - totals.claimed;
   return (
     <div className="space-y-4">
+      {letterReady && (
+        <div
+          className={`surface-card flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 bg-white px-4 py-3 text-sm text-slate-ink ${
+            openQuestions > 0 ? "border-l-gold" : "border-l-teal"
+          }`}
+        >
+          <Icon
+            name={openQuestions > 0 ? "warning" : "check-circle"}
+            size={16}
+            className={`shrink-0 ${openQuestions > 0 ? "text-gold" : "text-teal"}`}
+          />
+          <span className="min-w-0 flex-1">
+            {openQuestions > 0 ? (
+              <>
+                {openQuestions} correction{openQuestions === 1 ? "" : "s"} across{" "}
+                {[...undecided.values()].filter((n) => n > 0).length} sheet
+                {[...undecided.values()].filter((n) => n > 0).length === 1 ? "" : "s"}{" "}
+                {openQuestions === 1 ? "has" : "have"} not been ruled on. A correction nobody
+                accepts is not made, so those sheets go into the letter at what the trainer claimed
+                \u2014 write it now if you mean to, but those corrections will not be in it.
+              </>
+            ) : (
+              <>
+                Every finding has been decided. {sar(totals.verified)} SAR across {reports.length}{" "}
+                sheet{reports.length === 1 ? "" : "s"} is ready to go into the letter.
+              </>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onLetter}
+            className="no-print flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-bold text-white transition-[filter,scale] duration-150 ease-out hover:brightness-110 active:scale-[0.96]"
+          >
+            <Icon name="document" size={14} />
+            Monthly Incentives (.docx)
+          </button>
+        </div>
+      )}
       {missingCount > 0 && (
         <div className="surface-card flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink">
           <Icon name="people" size={16} className="shrink-0 text-gold" />
@@ -753,15 +1041,18 @@ function SummaryTable({
                 <th className="border-b border-hairline px-2 py-2">Sheet</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">Claimed</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">Verified</th>
+                <th className="border-b border-hairline px-2 py-2 text-right">To pay</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">Difference</th>
                 <th className="border-b border-hairline px-2 py-2 text-center">Must change</th>
-                <th className="border-b border-hairline px-2 py-2 text-center">Check</th>
+                <th className="border-b border-hairline px-2 py-2 text-center">To rule on</th>
                 <th className="no-print border-b border-hairline px-2 py-2" />
               </tr>
             </thead>
             <tbody>
               {reports.map((r, i) => {
-                const diff = r.verifiedTotal - r.claimedTotal;
+                const pay = payable.get(r.sheet.fileName) ?? r.verifiedTotal;
+                const open = undecided.get(r.sheet.fileName) ?? 0;
+                const diff = pay - r.claimedTotal;
                 return (
                   <tr
                     key={r.sheet.fileName}
@@ -775,6 +1066,14 @@ function SummaryTable({
                           not in record sheet
                         </span>
                       )}
+                      {drafted.has(r.sheet.fileName) && (
+                        <span
+                          title="No sheet arrived from this trainer, so one was drafted from the record sheet."
+                          className="ms-2 rounded bg-navy-050 px-1.5 py-0.5 text-[10px] font-bold text-navy"
+                        >
+                          drafted
+                        </span>
+                      )}
                     </td>
                     <td className="max-w-[280px] truncate border-b border-hairline px-2 py-2 text-xs text-slate-ink">
                       {r.sheet.fileName}
@@ -782,8 +1081,20 @@ function SummaryTable({
                     <td className="border-b border-hairline px-2 py-2 text-right tabular-nums text-navy">
                       {sar(r.claimedTotal)}
                     </td>
-                    <td className="border-b border-hairline px-2 py-2 text-right font-bold tabular-nums text-teal">
+                    <td className="border-b border-hairline px-2 py-2 text-right tabular-nums text-slate-ink">
                       {sar(r.verifiedTotal)}
+                    </td>
+                    <td
+                      title={
+                        pay > r.verifiedTotal
+                          ? "More than the record sheet backs \u2014 a finding here is still undecided, so the claim stands."
+                          : undefined
+                      }
+                      className={`border-b border-hairline px-2 py-2 text-right font-bold tabular-nums ${
+                        pay > r.verifiedTotal ? "text-gold" : "text-teal"
+                      }`}
+                    >
+                      {sar(pay)}
                     </td>
                     <td
                       className={`border-b border-hairline px-2 py-2 text-right font-bold tabular-nums ${
@@ -801,8 +1112,14 @@ function SummaryTable({
                         <Icon name="check-circle" size={15} className="mx-auto text-teal" />
                       )}
                     </td>
-                    <td className="border-b border-hairline px-2 py-2 text-center text-xs text-slate-ink">
-                      {r.warningCount || "—"}
+                    <td className="border-b border-hairline px-2 py-2 text-center text-xs">
+                      {open > 0 ? (
+                        <span className={`rounded px-1.5 py-0.5 font-bold ${SEVERITY.warning.chip}`}>
+                          {open}
+                        </span>
+                      ) : (
+                        <span className="text-slate-ink">—</span>
+                      )}
                     </td>
                     <td className="no-print border-b border-hairline px-2 py-2 text-right">
                       <button

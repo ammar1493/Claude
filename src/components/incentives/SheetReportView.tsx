@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildPlan } from "@/lib/incentives/correct";
 import { siteKey } from "@/lib/incentives/sites";
 import type { Decision, Finding, Severity, SheetReport, SiteDistance } from "@/lib/incentives/types";
@@ -45,40 +45,35 @@ export function SheetReportView({
   report,
   original,
   sites,
+  decisions,
+  onDecide,
+  onDecideMany,
   onSetSite,
 }: {
   report: SheetReport;
   /** The uploaded workbook, so a corrected copy can be written from it. */
   original: ArrayBuffer | null;
   sites: SiteDistance[];
+  /*
+   * Decisions live above this component and are keyed on the finding id, which
+   * carries the file name — so they survive moving between trainers, and a
+   * month's verification can be done in more than one sitting.
+   */
+  decisions: Record<string, Decision>;
+  onDecide: (id: string, decision: Decision) => void;
+  onDecideMany: (ids: string[], decision: Decision) => void;
   onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<Set<Severity>>(new Set(SEVERITY_ORDER));
-  /*
-   * Decisions are keyed on the finding id, which is derived from what the
-   * finding is about — so setting a distance re-runs the rules without losing
-   * the calls already made on everything else.
-   */
-  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 
-  // A different trainer is a different sheet; keep nothing from the last one.
+  // A different trainer is a different sheet; the selection does not carry.
   useEffect(() => {
     setSelected(null);
-    setDecisions({});
   }, [report.sheet.fileName]);
 
-  const decide = useCallback((id: string, decision: Decision) => {
-    setDecisions((prev) => ({ ...prev, [id]: decision }));
-  }, []);
-
-  const decideMany = useCallback((ids: string[], decision: Decision) => {
-    setDecisions((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = decision;
-      return next;
-    });
-  }, []);
+  const decide = onDecide;
+  const decideMany = onDecideMany;
 
   const accepted = useMemo(
     () => new Set(report.findings.filter((f) => decisions[f.id] === "accepted").map((f) => f.id)),

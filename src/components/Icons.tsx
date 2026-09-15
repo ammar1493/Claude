@@ -13,7 +13,7 @@ export type IconName =
   | "people" | "calendar" | "calendar-check" | "speedometer" | "mortarboard" | "pie" | "diagram"
   | "clock" | "clock-history" | "graph-up" | "book" | "check-circle" | "download" | "refresh"
   | "plus" | "trash" | "info" | "trophy" | "leaf" | "award" | "filter" | "pencil" | "upload"
-  | "printer" | "x" | "warning" | "arrow-up" | "expand" | "collapse";
+  | "printer" | "x" | "warning" | "arrow-up" | "expand" | "collapse" | "document";
 
 const PATHS: Record<IconName, string> = {
   gauge: "M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm1.4-3.4L18 6M3 20a9 9 0 1 1 18 0",
@@ -48,6 +48,7 @@ const PATHS: Record<IconName, string> = {
   pencil: "M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z",
   upload: "M12 19V7m0 0-4 4m4-4 4 4M4 21h16",
   printer: "M7 9V3h10v6M7 19H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7z",
+  document: "M6 3h7l5 5v13H6V3Zm7 0v5h5M9 13h6M9 17h6",
   x: "M6 6l12 12M18 6 6 18",
   warning: "M12 4 2.5 20h19L12 4Zm0 6v5m0 2.5v.5",
   "arrow-up": "M12 19V5m0 0-6 6m6-6 6 6",
