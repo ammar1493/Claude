@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
 import { downloadFindingsWorkbook } from "@/lib/incentives/export";
+import {
+  buildGeneratedWorkbook,
+  findMissingInstructors,
+  type GeneratedSheet,
+} from "@/lib/incentives/generate";
 import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
 import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
 import { parseIncentiveSheet } from "@/lib/incentives/timesheet";
@@ -23,6 +28,7 @@ import { Icon } from "../Icons";
 import { FileSlot } from "./FileSlot";
 import { SEVERITY } from "./severity";
 import { SheetReportView } from "./SheetReportView";
+import { MissingSheetsPanel } from "./MissingSheetsPanel";
 import { SitesPanel } from "./SitesPanel";
 import { TimecardsPanel } from "./TimecardsPanel";
 
@@ -30,6 +36,7 @@ import { TimecardsPanel } from "./TimecardsPanel";
 const ALL_SHEETS = -1;
 const SITES_TAB = -2;
 const TIMECARDS_TAB = -3;
+const MISSING_TAB = -4;
 
 interface StoredFile {
   name: string;
@@ -52,6 +59,8 @@ export function IncentiveVerifier() {
   const [restored, setRestored] = useState(false);
   const [sites, setSites] = useState<SiteDistance[]>([]);
   const [timecards, setTimecards] = useState<Timecard[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [templateName, setTemplateName] = useState<string | null>(null);
 
   /* The three workbooks stay in the browser between visits — the record sheet
      and the course list barely change month to month, and re-uploading them to
@@ -59,16 +68,18 @@ export function IncentiveVerifier() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [rec, cou, all, savedSites, savedCards] = await Promise.all([
+      const [rec, cou, all, savedSites, savedCards, savedExcluded] = await Promise.all([
         getWorkbook("record"),
         getWorkbook("courses"),
         listWorkbooks("incentive"),
         getSetting<SiteDistance[]>("incentive:sites"),
         getSetting<Timecard[]>("incentive:timecards"),
+        getSetting<string[]>("incentive:excluded"),
       ]);
       if (cancelled) return;
       if (savedSites?.length) setSites(savedSites);
       if (savedCards?.length) setTimecards(savedCards);
+      if (savedExcluded?.length) setExcluded(savedExcluded);
       if (rec) setRecord({ name: rec.name, data: rec.data });
       if (cou) setCourses({ name: cou.name, data: cou.data });
       if (all.length) {
@@ -152,6 +163,50 @@ export function IncentiveVerifier() {
   }, [parsedSheets.parsed, parsedRecord.value, parsedCourses.value, siteTable, timecards]);
 
   const failures = parsedSheets.failures;
+
+  /* Whose sheet never arrived, and what the record sheet says they are owed. */
+  const template = useMemo(() => {
+    const byName = parsedSheets.parsed.find((p) => p.fileName === templateName);
+    return byName ?? parsedSheets.parsed[0] ?? null;
+  }, [parsedSheets.parsed, templateName]);
+
+  const missing = useMemo(() => {
+    const rec = parsedRecord.value;
+    const cat = parsedCourses.value;
+    if (!rec || !cat) return [];
+    const submitted = reports
+      .map((r) => r.matchedInstructor ?? r.sheet.instructorName)
+      .filter(Boolean);
+    return findMissingInstructors(rec, cat, submitted, timecards, siteTable, template, excluded);
+  }, [parsedRecord.value, parsedCourses.value, reports, timecards, siteTable, template, excluded]);
+
+  const generateSheets = useCallback(
+    async (names: string[]): Promise<GeneratedSheet[]> => {
+      const rec = parsedRecord.value;
+      const cat = parsedCourses.value;
+      if (!rec || !cat || !template) return [];
+      const file = sheets.find((f) => f.name === template.fileName);
+      if (!file) throw new Error("The template workbook is no longer in this browser.");
+      const out: GeneratedSheet[] = [];
+      for (const name of names) {
+        out.push(
+          await buildGeneratedWorkbook(file.data, template, name, rec, cat, siteTable, timecards),
+        );
+      }
+      return out;
+    },
+    [parsedRecord.value, parsedCourses.value, template, sheets, siteTable, timecards],
+  );
+
+  const setExclusion = useCallback((name: string, exclude: boolean) => {
+    setExcluded((prev) => {
+      const next = exclude
+        ? [...new Set([...prev, name])].sort()
+        : prev.filter((n) => n !== name);
+      void putSetting("incentive:excluded", next);
+      return next;
+    });
+  }, []);
 
   const unpricedSites = useMemo(
     () => siteUsage.filter((u) => bandForSite(sites.find((s) => siteKey(s.name) === u.key)) === null),
@@ -512,6 +567,26 @@ export function IncentiveVerifier() {
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setActive(MISSING_TAB)}
+                aria-current={active === MISSING_TAB ? "page" : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
+                  active === MISSING_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                }`}
+              >
+                <Icon name="people" size={14} />
+                Not received
+                {missing.length > 0 && (
+                  <span
+                    className={`rounded px-1 text-[10px] font-bold ${
+                      active === MISSING_TAB ? "bg-white/20 text-white" : SEVERITY.warning.chip
+                    }`}
+                  >
+                    {missing.length}
+                  </span>
+                )}
+              </button>
               <span aria-hidden className="mx-1 w-px self-stretch bg-hairline" />
               {reports.map((r, i) => (
                 <button
@@ -543,13 +618,27 @@ export function IncentiveVerifier() {
                 totals={totals}
                 monthLabel={monthLabel}
                 unpricedSites={unpricedSites.length}
+                missingCount={missing.length}
                 onOpen={setActive}
                 onOpenSites={() => setActive(SITES_TAB)}
+                onOpenMissing={() => setActive(MISSING_TAB)}
                 onRemove={(name) => void removeSheet(name)}
               />
             )}
             {active === SITES_TAB && (
               <SitesPanel usage={siteUsage} sites={sites} onChange={saveSites} />
+            )}
+            {active === MISSING_TAB && (
+              <MissingSheetsPanel
+                missing={missing}
+                templates={parsedSheets.parsed.map((p) => ({ name: p.fileName, sheet: p }))}
+                templateName={template?.fileName ?? null}
+                excluded={excluded}
+                monthLabel={monthLabel}
+                onTemplate={setTemplateName}
+                onExclude={setExclusion}
+                onGenerate={generateSheets}
+              />
             )}
             {active === TIMECARDS_TAB && (
               <TimecardsPanel
@@ -583,21 +672,41 @@ function SummaryTable({
   totals,
   monthLabel,
   unpricedSites,
+  missingCount,
   onOpen,
   onOpenSites,
+  onOpenMissing,
   onRemove,
 }: {
   reports: SheetReport[];
   totals: { claimed: number; verified: number; errors: number; warnings: number };
   monthLabel: string;
   unpricedSites: number;
+  missingCount: number;
   onOpen: (index: number) => void;
   onOpenSites: () => void;
+  onOpenMissing: () => void;
   onRemove: (name: string) => void;
 }) {
   const difference = totals.verified - totals.claimed;
   return (
     <div className="space-y-4">
+      {missingCount > 0 && (
+        <div className="surface-card flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink">
+          <Icon name="people" size={16} className="shrink-0 text-gold" />
+          <span className="min-w-0 flex-1">
+            {missingCount} trainer{missingCount === 1 ? "" : "s"} taught this month and sent no
+            sheet, so nothing was claimed for {missingCount === 1 ? "them" : "them"}.
+          </span>
+          <button
+            type="button"
+            onClick={onOpenMissing}
+            className="no-print rounded-md bg-gold px-3 py-1.5 text-xs font-bold text-navy transition-[filter,scale] duration-150 ease-out hover:brightness-105 active:scale-[0.96]"
+          >
+            Draft their sheets
+          </button>
+        </div>
+      )}
       {unpricedSites > 0 && (
         <div className="surface-card flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink">
           <Icon name="warning" size={16} className="shrink-0 text-gold" />

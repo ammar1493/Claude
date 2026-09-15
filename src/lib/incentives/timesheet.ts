@@ -132,6 +132,50 @@ export const KIND_LABELS: Record<ClaimKind, string> = {
   unknown: "Unrecognised line",
 };
 
+export const FRIDAY = 5;
+export const SATURDAY = 6;
+
+/** The half- and full-day lines a given weekday is paid on. */
+export function expectedKinds(weekday: number): { half: ClaimKind; full: ClaimKind } {
+  if (weekday === FRIDAY) return { half: "friHalf", full: "friFull" };
+  if (weekday === SATURDAY) return { half: "satHalf", full: "satFull" };
+  return { half: "halfAM", full: "full" };
+}
+
+/**
+ * The rate line a day of this size, on this weekday, in this band belongs on.
+ *
+ * Shared by the verifier, which uses it to say where a wrongly-placed tick
+ * should move, and by the generator, which uses it to place the ticks on a
+ * sheet nobody submitted. Null when the day is worth nothing.
+ */
+export function targetKind(
+  sheet: IncentiveSheet,
+  section: ClaimSection,
+  weekday: number,
+  days: number,
+): ClaimKind | null {
+  if (days <= 0) return null;
+  if (section === "near") {
+    const { half, full } = expectedKinds(weekday);
+    return days <= 0.5 ? half : full;
+  }
+  const hasFriday = sheet.rows.some((r) => r.section === section && r.kind === "friday" && r.rate > 0);
+  return weekday === FRIDAY && hasFriday ? "friday" : "daily";
+}
+
+/** The cell a rate line's tick for a day of the month goes in. */
+export function claimCell(
+  sheet: IncentiveSheet,
+  section: ClaimSection,
+  kind: ClaimKind,
+  day: number,
+): string | null {
+  const row = sheet.rows.find((r) => r.section === section && r.kind === kind);
+  const column = sheet.dayColumns.find((d) => !d.nextMonth && d.day === day)?.column;
+  return row && column ? `${column}${row.rowIndex}` : null;
+}
+
 /* ------------------------------------------------------------------ *
  * The claim grid
  * ------------------------------------------------------------------ */
@@ -142,6 +186,7 @@ interface GridLayout {
   dayCols: { day: number; col: number; nextMonth: boolean }[];
   rateCol: number;
   totalCol: number;
+  initialsCol: number;
 }
 
 /**
@@ -164,11 +209,13 @@ function findGrid(grid: Grid): GridLayout | null {
     const dayCols: GridLayout["dayCols"] = [];
     let rateCol = -1;
     let totalCol = -1;
+    let initialsCol = -1;
     let seenDay1 = false;
     for (let c = labelCol + 1; c < width; c += 1) {
       const raw = cellAt(grid, row, c);
       const label = cellToString(raw);
       if (/^sar$/i.test(label)) rateCol = c;
+      else if (/^initials$/i.test(label)) initialsCol = c;
       else if (/^total/i.test(label)) totalCol = c;
       else if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1 && raw <= 31) {
         // The template repeats a "1" after the 31st for the next month's
@@ -179,7 +226,7 @@ function findGrid(grid: Grid): GridLayout | null {
       }
     }
     if (dayCols.length >= 20 && totalCol >= 0) {
-      return { headerRow: row, labelCol, dayCols, rateCol, totalCol };
+      return { headerRow: row, labelCol, dayCols, rateCol, totalCol, initialsCol };
     }
   }
   return null;
@@ -317,26 +364,46 @@ function parseVerification(
  * Header fields
  * ------------------------------------------------------------------ */
 
-/** Read a labelled header field: the first filled cell right of the label. */
-function labelledValue(grid: Grid, upto: number, pattern: RegExp): string {
+/**
+ * Find a labelled field: "Instructor Name:" and the cell holding the answer.
+ *
+ * The address matters as much as the value — a sheet generated for a trainer
+ * who never sent one has to write their name into the same cell the template
+ * uses, whichever column the label happens to sit in.
+ */
+function labelledField(
+  grid: Grid,
+  upto: number,
+  pattern: RegExp,
+): { value: string; cell: string | null } {
   for (let row = 0; row < Math.min(grid.length, upto); row += 1) {
     const width = grid[row]?.length ?? 0;
     for (let c = 0; c < width; c += 1) {
       if (!pattern.test(text(grid, row, c))) continue;
-      for (let k = c + 1; k < width; k += 1) {
+      // Bounded, because the signature row carries "Verifier By:" and
+      // "Approved by:" side by side — scanning the whole row for the first
+      // filled cell would hand back the next label as this one's answer.
+      const limit = Math.min(width, c + 11);
+      for (let k = c + 1; k < limit; k += 1) {
         const v = cellAt(grid, row, k);
         if (v === null || v === "") continue;
+        if (/:$/.test(text(grid, row, k))) break;
         // A month typed as a date arrives as an Excel serial; "August" does not.
         const asDate =
           v instanceof Date || (typeof v === "number" && v > 20000 && v < 80000)
             ? cellToDate(v)
             : null;
-        if (asDate) return asDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-        return cellToString(v).replace(/\s+/g, " ").trim();
+        const value = asDate
+          ? asDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+          : cellToString(v).replace(/\s+/g, " ").trim();
+        return { value, cell: addr(row, k) };
       }
+      // A label with nothing beside it still tells us where the answer goes:
+      // the next cell along, which a blank template leaves empty.
+      return { value: "", cell: addr(row, c + 1) };
     }
   }
-  return "";
+  return { value: "", cell: null };
 }
 
 /* ------------------------------------------------------------------ *
@@ -396,8 +463,14 @@ export function parseIncentiveSheet(
   const statedGrandTotal =
     grandTotalRow >= 0 ? cellToNumber(cellAt(grid, grandTotalRow, layout.totalCol)) : null;
 
-  const instructorName = labelledValue(grid, layout.headerRow, /instructor\s*'?s?\s*name/i);
-  const monthLabel = labelledValue(grid, layout.headerRow, /^month\b/i);
+  const instructor = labelledField(grid, layout.headerRow, /instructor\s*'?s?\s*name/i);
+  const month = labelledField(grid, layout.headerRow, /^month\b/i);
+  const instructorName = instructor.value;
+  const monthLabel = month.value;
+  // The signature blocks sit below the grid; a generated sheet must not carry
+  // the initials of whoever verified the workbook it was copied from.
+  const verifier = labelledField(grid, grid.length, /^verifier\s*(by)?\s*:?$/i);
+  const approver = labelledField(grid, grid.length, /^approved\s*by\s*:?$/i);
   if (!instructorName) parseWarnings.push("No instructor name is written on the time sheet.");
   if (!verification) parseWarnings.push("This workbook has no verification log tab.");
 
@@ -408,6 +481,10 @@ export function parseIncentiveSheet(
     timeSheetName,
     verificationSheetName,
     headerRow: layout.headerRow + 1,
+    instructorCell: instructor.cell,
+    monthCell: month.cell,
+    initialsColumn: layout.initialsCol >= 0 ? XLSX.utils.encode_col(layout.initialsCol) : null,
+    signatureCells: [verifier.cell, approver.cell].filter((c): c is string => Boolean(c)),
     dayColumns: layout.dayCols.map((d) => ({
       day: d.day,
       column: XLSX.utils.encode_col(d.col),

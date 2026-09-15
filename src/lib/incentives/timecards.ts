@@ -1,6 +1,6 @@
 import { matchInstructor, nameSimilarity } from "./names";
 import { addDays, dayKey } from "./record";
-import type { SiteDistance, Timecard, TimecardCover } from "./types";
+import type { SiteDistance, Timecard, TimecardCategory, TimecardCover } from "./types";
 import { bandForSite } from "./sites";
 
 /**
@@ -90,6 +90,25 @@ export function cardsFor(cards: Timecard[], names: string[]): Timecard[] {
   return cards.filter((c) => matchesAnyName(c.assessor, usable));
 }
 
+export const CATEGORY_LABELS: Record<TimecardCategory, string> = {
+  assessment: "Assessment",
+  report: "Report writing",
+  other: "Other",
+};
+
+/**
+ * Days a set of cards confirms, split by what they were for.
+ *
+ * `assessment` is the figure that answers "how many days does the timecard
+ * confirm" — the report-writing days are worked and paid, but they are not
+ * days on the unit and counting them there would overstate the trip.
+ */
+export function daysByCategory(cards: Timecard[]): Record<TimecardCategory, number> {
+  const out: Record<TimecardCategory, number> = { assessment: 0, report: 0, other: 0 };
+  for (const card of cards) out[card.category] += spanDays(card);
+  return out;
+}
+
 export function describeTimecard(card: Timecard): string {
   const start = parseIsoDate(card.start);
   const end = parseIsoDate(card.end);
@@ -97,7 +116,8 @@ export function describeTimecard(card: Timecard): string {
     d ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "?";
   const where = card.unit ? ` · ${card.unit}` : "";
   const days = spanDays(card);
-  return `${card.activity || "Timecard"}${where} · ${fmt(start)}–${fmt(end)} · ${days} day${days === 1 ? "" : "s"}${
+  const kind = card.category === "assessment" ? "" : ` · ${CATEGORY_LABELS[card.category].toLowerCase()}`;
+  return `${card.activity || "Timecard"}${where}${kind} · ${fmt(start)}–${fmt(end)} · ${days} day${days === 1 ? "" : "s"}${
     card.provider ? ` · ${card.provider}` : ""
   }${card.attachmentName ? ` · ${card.attachmentName}` : ""}`;
 }
@@ -109,6 +129,7 @@ export function newTimecard(partial?: Partial<Timecard>): Timecard {
     provider: "",
     unit: "",
     activity: "Competency assessment",
+    category: "assessment",
     start: "",
     end: "",
     totalDays: null,

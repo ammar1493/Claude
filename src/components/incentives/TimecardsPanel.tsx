@@ -1,8 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { describeTimecard, newTimecard, spanDays } from "@/lib/incentives/timecards";
-import type { SiteKind, Timecard } from "@/lib/incentives/types";
+import {
+  CATEGORY_LABELS,
+  daysByCategory,
+  describeTimecard,
+  newTimecard,
+  spanDays,
+} from "@/lib/incentives/timecards";
+import type { SiteKind, Timecard, TimecardCategory } from "@/lib/incentives/types";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
 import { SEVERITY } from "./severity";
@@ -83,6 +89,7 @@ export function TimecardsPanel({
   const remove = (id: string) => onChange(timecards.filter((t) => t.id !== id));
 
   const valid = draft && draft.assessor.trim() && spanDays(draft) > 0;
+  const totals = daysByCategory(timecards);
 
   return (
     <div className="space-y-4">
@@ -92,10 +99,39 @@ export function TimecardsPanel({
           Competency assessment on a rig, and the report writing after it, produce no certificates,
           so the record sheet has nothing to show for them and those days read as unsupported claim.
           Add the client-signed timecard here and its days count as evidence, at the band the unit
-          sits in. If the record sheet also shows classroom teaching on a day a card covers, the
-          report says so rather than picking one.
+          sits in. A card usually carries two rows — the days on the unit and the days added
+          afterwards for the write-up — so each block says what it counts as, and{" "}
+          <strong className="text-navy">the confirmed figure is the assessment days alone</strong>.
+          If the record sheet also shows classroom teaching on a day a card covers, the report says
+          so rather than picking one.
         </p>
       </div>
+
+      {timecards.length > 0 && (
+        <div className="stage stage-2 grid gap-3 sm:grid-cols-3">
+          {(
+            [
+              ["assessment", "Assessment days", "text-navy"],
+              ["report", "Report-writing days", "text-slate-ink"],
+              ["other", "Other days", "text-slate-ink"],
+            ] as const
+          )
+            .filter(([k]) => k === "assessment" || totals[k] > 0)
+            .map(([key, label, tone]) => (
+              <div key={key} className="surface-card rounded-xl bg-white px-4 py-3">
+                <p className="text-[11px] font-bold tracking-wide text-slate-ink uppercase">{label}</p>
+                <p className={`mt-0.5 text-2xl leading-tight font-black tabular-nums ${tone}`}>
+                  {totals[key]}
+                </p>
+                {key === "report" && (
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-ink">
+                    Counted apart: office days after the trip, not days on the unit.
+                  </p>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
 
       <Card
         title={`Timecards (${timecards.length})`}
@@ -128,6 +164,7 @@ export function TimecardsPanel({
                   <th className="border-b border-hairline px-2 py-2">Assessor</th>
                   <th className="border-b border-hairline px-2 py-2">Unit</th>
                   <th className="border-b border-hairline px-2 py-2">Activity</th>
+                  <th className="border-b border-hairline px-2 py-2">Counts as</th>
                   <th className="border-b border-hairline px-2 py-2">Dates</th>
                   <th className="border-b border-hairline px-2 py-2 text-right">Days</th>
                   <th className="border-b border-hairline px-2 py-2">Band</th>
@@ -152,6 +189,17 @@ export function TimecardsPanel({
                       <td className="border-b border-hairline px-2 py-1.5 text-navy">{card.unit}</td>
                       <td className="border-b border-hairline px-2 py-1.5 text-slate-ink">
                         {card.activity}
+                      </td>
+                      <td className="border-b border-hairline px-2 py-1.5">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
+                            card.category === "assessment"
+                              ? "bg-navy-050 text-navy"
+                              : "bg-fog text-slate-ink"
+                          }`}
+                        >
+                          {CATEGORY_LABELS[card.category]}
+                        </span>
                       </td>
                       <td className="border-b border-hairline px-2 py-1.5 whitespace-nowrap text-slate-ink">
                         {card.start} → {card.end}
@@ -288,6 +336,32 @@ export function TimecardsPanel({
                   }}
                   className={inputClass}
                 />
+              </Field>
+              <Field
+                label="Counts as"
+                hint="Report writing is worked and payable, but not a day on the unit."
+              >
+                <select
+                  value={draft.category}
+                  onChange={(e) => {
+                    const category = e.target.value as TimecardCategory;
+                    setDraft({
+                      ...draft,
+                      category,
+                      // Report writing happens in the office, so the band
+                      // follows unless the verifier says otherwise.
+                      kind: category === "report" ? "centre" : draft.kind,
+                      km: category === "report" ? 0 : draft.km,
+                    });
+                  }}
+                  className={inputClass}
+                >
+                  {(["assessment", "report", "other"] as TimecardCategory[]).map((k) => (
+                    <option key={k} value={k}>
+                      {CATEGORY_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Pays at">
                 <select

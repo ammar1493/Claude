@@ -115,6 +115,50 @@ export class SiteTable {
   }
 }
 
+/** A place a day happened, and what the table knows about it. */
+export interface NamedSite {
+  name: string;
+  site: SiteDistance | null;
+}
+
+export interface ResolvedBand {
+  /** The band the day belongs in, or null while a site is unpriced. */
+  band: ClaimSection | null;
+  /** Every place the day touched, tidied. */
+  sites: string[];
+  /** Those the office has not given a distance yet. */
+  unpriced: string[];
+}
+
+const BAND_RANK: Record<string, number> = { near: 0, mid: 1, far: 2 };
+
+/**
+ * The band a day belongs in, from the places it touched.
+ *
+ * The furthest place wins — a morning at the centre and an afternoon two
+ * hundred kilometres out is not an in-house day. An unpriced site can only
+ * raise the band, so a day already resolved to the top band is settled even
+ * with one outstanding; anything lower stays open rather than guessing low.
+ */
+export function resolveBand(named: NamedSite[]): ResolvedBand {
+  const sites = [...new Set(named.map((n) => siteLabel(n.name)).filter(Boolean))];
+  const unpriced: string[] = [];
+  let band: ClaimSection | null = null;
+
+  for (const { name, site } of named) {
+    const b = bandForSite(site);
+    if (!b) {
+      const label = siteLabel(name);
+      if (label && !unpriced.includes(label)) unpriced.push(label);
+      continue;
+    }
+    if (band === null || BAND_RANK[b] > BAND_RANK[band]) band = b;
+  }
+
+  if (unpriced.length && band !== "far") return { band: null, sites, unpriced };
+  return { band, sites, unpriced };
+}
+
 export interface SiteUsage {
   name: string;
   key: string;

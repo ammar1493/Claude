@@ -61,6 +61,13 @@ a string (see `names.ts`), and a file download must go through
 `saveFile()` rather than its own anchor, because the artifact viewer's sandbox
 makes anchors inert.
 
+Sheets are also drafted for trainers who sent none (`generate.ts`), on the
+template another trainer submitted — which is wiped of its ticks, initials and
+signature cells first, so nothing of the sheet it came from survives into
+someone else's claim. Those are drafts of what the record sheet says is owed,
+never a claim the trainer made, and nothing in the app or the file name should
+suggest otherwise.
+
 Two facts live outside the files and are entered by the office — how far each
 site is from the centre, and the signed timecards for work that issues no
 certificates. Both are kept in IndexedDB and reused every month. Never infer

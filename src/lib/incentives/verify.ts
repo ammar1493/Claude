@@ -1,8 +1,24 @@
 import { CourseCatalog } from "./courses";
 import { matchInstructor } from "./names";
-import { bandForSite, describeSite, SiteTable, siteLabel } from "./sites";
+import {
+  bandForSite,
+  describeSite,
+  resolveBand,
+  SiteTable,
+  type NamedSite,
+  type ResolvedBand,
+} from "./sites";
 import { dateToSerial } from "./xlsxEdit";
-import { coverageFor, cardsFor, describeTimecard, parseIsoDate, siteForTimecard, spanDays } from "./timecards";
+import {
+  cardsFor,
+  coverageFor,
+  daysByCategory,
+  describeTimecard,
+  parseIsoDate,
+  siteForTimecard,
+  spanDays,
+  timecardDates,
+} from "./timecards";
 import {
   addDays,
   buildRecordDays,
@@ -11,7 +27,15 @@ import {
   sessionCandidates,
   type ParsedRecordSheet,
 } from "./record";
-import { KIND_LABELS, SECTION_LABELS } from "./timesheet";
+import {
+  claimCell,
+  expectedKinds,
+  FRIDAY,
+  KIND_LABELS,
+  SATURDAY,
+  SECTION_LABELS,
+  targetKind,
+} from "./timesheet";
 import type {
   CellEdit,
   ClaimKind,
@@ -29,9 +53,6 @@ import type {
   SheetReport,
   TeachingBlock,
 } from "./types";
-
-const FRIDAY = 5;
-const SATURDAY = 6;
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -65,12 +86,6 @@ function evidenceFor(day: RecordDay | null): string[] {
 /* ------------------------------------------------------------------ *
  * Which rate line a given day should have used
  * ------------------------------------------------------------------ */
-
-function expectedKinds(weekday: number): { half: ClaimKind; full: ClaimKind } {
-  if (weekday === FRIDAY) return { half: "friHalf", full: "friFull" };
-  if (weekday === SATURDAY) return { half: "satHalf", full: "satFull" };
-  return { half: "halfAM", full: "full" };
-}
 
 type DayCategory = "weekday" | "friday" | "saturday";
 
@@ -342,45 +357,6 @@ export function verifySheet(
     verificationSitesByDate.set(key, list);
   }
 
-  const BAND_RANK: Record<string, number> = { near: 0, mid: 1, far: 2 };
-
-  function bandOfDay(
-    key: string,
-    rec: RecordDay | null,
-    covers: TimecardCover[],
-  ): { band: ClaimSection | null; sites: string[]; unpriced: string[] } {
-    const named: { name: string; site: SiteDistance | null }[] = [];
-    for (const name of rec?.locations ?? []) named.push({ name, site: sites.get(name) });
-    for (const cover of covers) {
-      const site = siteForTimecard(cover.timecard);
-      named.push({ name: site.name, site });
-    }
-    // A trainer's own log is the only clue on a day the record sheet leaves
-    // blank, so it is consulted last rather than not at all.
-    if (!named.length) {
-      for (const name of verificationSitesByDate.get(key) ?? []) {
-        named.push({ name, site: sites.get(name) });
-      }
-    }
-
-    const seen = [...new Set(named.map((n) => siteLabel(n.name)).filter(Boolean))];
-    const unpriced: string[] = [];
-    let band: ClaimSection | null = null;
-    for (const { name, site } of named) {
-      const b = bandForSite(site);
-      if (!b) {
-        const label = siteLabel(name);
-        if (label && !unpriced.includes(label)) unpriced.push(label);
-        continue;
-      }
-      if (band === null || BAND_RANK[b] > BAND_RANK[band]) band = b;
-    }
-    // One unpriced site can only raise the band, so a day that already reads
-    // "far" is settled; anything lower is still open.
-    if (unpriced.length && band !== "far") return { band: null, sites: seen, unpriced };
-    return { band, sites: seen, unpriced };
-  }
-
   /*
    * Turning a correction into cells.
    *
@@ -389,30 +365,6 @@ export function verifySheet(
    * finding can carry the edit that puts the sheet right and the corrected
    * workbook can be written from the trainer's own file.
    */
-  const columnForDay = new Map<number, string>();
-  for (const d of sheet.dayColumns) {
-    if (!d.nextMonth && !columnForDay.has(d.day)) columnForDay.set(d.day, d.column);
-  }
-
-  const rowFor = (section: ClaimSection, kind: ClaimKind): ClaimRow | null =>
-    sheet.rows.find((r) => r.section === section && r.kind === kind) ?? null;
-
-  const cellFor = (section: ClaimSection, kind: ClaimKind, day: number): string | null => {
-    const row = rowFor(section, kind);
-    const column = columnForDay.get(day);
-    return row && column ? `${column}${row.rowIndex}` : null;
-  };
-
-  /** The rate line a day of this size, on this weekday, belongs on. */
-  const targetKind = (section: ClaimSection, weekday: number, days: number): ClaimKind | null => {
-    if (days <= 0) return null;
-    if (section === "near") {
-      const { half, full } = expectedKinds(weekday);
-      return days <= 0.5 ? half : full;
-    }
-    return weekday === FRIDAY && rowFor(section, "friday") ? "friday" : "daily";
-  };
-
   const clearEdits = (cells: string[]): CellEdit[] =>
     cells.map((cell) => ({
       sheet: "timesheet" as const,
@@ -433,9 +385,9 @@ export function verifySheet(
     days: number,
     day: number,
   ): CellEdit[] | null => {
-    const kind = targetKind(section, weekday, days);
+    const kind = targetKind(sheet, section, weekday, days);
     if (!kind) return clearEdits(cells);
-    const target = cellFor(section, kind, day);
+    const target = claimCell(sheet, section, kind, day);
     if (!target) return null;
     const edits = clearEdits(cells.filter((c) => c !== target));
     edits.push({
@@ -446,6 +398,27 @@ export function verifySheet(
     });
     return edits;
   };
+
+  function bandOfDay(
+    key: string,
+    rec: RecordDay | null,
+    covers: TimecardCover[],
+  ): ResolvedBand {
+    const named: NamedSite[] = [];
+    for (const name of rec?.locations ?? []) named.push({ name, site: sites.get(name) });
+    for (const cover of covers) {
+      const site = siteForTimecard(cover.timecard);
+      named.push({ name: site.name, site });
+    }
+    // A trainer's own log is the only clue on a day the record sheet leaves
+    // blank, so it is consulted last rather than not at all.
+    if (!named.length) {
+      for (const name of verificationSitesByDate.get(key) ?? []) {
+        named.push({ name, site: sites.get(name) });
+      }
+    }
+    return resolveBand(named);
+  }
 
   /* ---------------- collect the claims by date ---------------- */
 
@@ -540,6 +513,62 @@ export function verifySheet(
     report.claims.push({ row: c.row, cell: c.cell });
     report.claimedDays += c.row.dayValue;
     report.claimedSar += c.row.rate;
+  }
+
+  /*
+   * What the cards confirm.
+   *
+   * A card usually carries two rows: the days on the unit, and the days added
+   * afterwards for writing the report in the office. "The timecard confirms
+   * eight days" means the first of those, so the two are counted apart and the
+   * office day never passes for a day offshore.
+   */
+  if (myCards.length) {
+    const byCategory = daysByCategory(myCards);
+    const assessmentDates = new Set<string>();
+    for (const card of myCards) {
+      if (card.category !== "assessment") continue;
+      for (const d of timecardDates(card)) assessmentDates.add(dayKey(d));
+    }
+    const onAssessmentDays = claims.filter(
+      (c) =>
+        !c.nextMonth &&
+        c.row.dayValue > 0 &&
+        assessmentDates.has(dayKey(new Date(year, month, c.day))),
+    );
+    const claimedDays = new Set(onAssessmentDays.map((c) => c.day)).size;
+    const parts = [
+      `${byCategory.assessment} assessment day${byCategory.assessment === 1 ? "" : "s"}`,
+      byCategory.report
+        ? `${byCategory.report} report-writing day${byCategory.report === 1 ? "" : "s"}`
+        : "",
+      byCategory.other ? `${byCategory.other} logged as other` : "",
+    ].filter(Boolean);
+
+    findings.push(
+      makeFinding({
+        severity: claimedDays < byCategory.assessment ? "warning" : "info",
+        code: "timecard-days",
+        title: `Timecards confirm ${byCategory.assessment} assessment day${byCategory.assessment === 1 ? "" : "s"}`,
+        why:
+          `${myCards.length} signed timecard${myCards.length === 1 ? "" : "s"} on file: ${parts.join(", ")}. ` +
+          `The report-writing days are worked and payable, but they are office days rather than days on the unit, so they are not part of the ${byCategory.assessment}-day figure. ` +
+          `The sheet claims ${claimedDays} day${claimedDays === 1 ? "" : "s"} across the assessment dates` +
+          (claimedDays === byCategory.assessment
+            ? " — the two agree."
+            : claimedDays < byCategory.assessment
+              ? ", fewer than the cards cover. Confirm before paying the lower figure."
+              : "."),
+        suggestion: null,
+        sheet: "timesheet",
+        cells: onAssessmentDays.map((c) => c.cell),
+        date: null,
+        claimedSar: onAssessmentDays.reduce((sum, c) => sum + c.row.rate, 0),
+        suggestedSar: null,
+        delta: null,
+        evidence: myCards.map((c) => `Timecard: ${describeTimecard(c)}`),
+      }),
+    );
   }
 
   const addDayFinding = (
@@ -658,6 +687,44 @@ export function verifySheet(
         claimedSar: report.claimedSar,
         suggestedSar: null,
         delta: null,
+        evidence,
+      });
+    }
+
+    /*
+     * An office day paid at the unit's rate.
+     *
+     * The report-writing days on a card are worked days, but they are spent at
+     * a desk — the distance band exists for the trip, not for the write-up
+     * afterwards, so a band claim on a day only a report card covers is the
+     * one thing the two-row card is there to catch.
+     */
+    const reportOnly =
+      covers.length > 0 &&
+      covers.every((c) => c.timecard.category === "report") &&
+      !(rec && (rec.blocks.length > 0 || rec.continuations.length > 0));
+    if (reportOnly && bandClaims.length) {
+      const claimedSar = bandClaims.reduce((sum, c) => sum + c.row.rate, 0);
+      const suggested = suggestedSarFor(sheet, weekday, 1);
+      addDayFinding(report, {
+        severity: "error",
+        code: "band",
+        title: "Report-writing day claimed at the distance rate",
+        why: `${fmtDate(date)} is covered only by the report-writing rows of a timecard (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}) — the office days added after the trip, not days on the unit. It is claimed under "${SECTION_LABELS[bandClaims[0].row.section]}" at ${sar(claimedSar)}. Move it to the ${SECTION_LABELS.near} band.`,
+        suggestion: `Move to the ${SECTION_LABELS.near} band.`,
+        fix: retickEdits(
+          bandClaims.map((c) => c.cell),
+          "near",
+          weekday,
+          1,
+          date.getDate(),
+        ),
+        sheet: "timesheet",
+        cells: bandClaims.map((c) => c.cell),
+        date,
+        claimedSar,
+        suggestedSar: suggested,
+        delta: suggested === null ? null : suggested - claimedSar,
         evidence,
       });
     }
@@ -935,8 +1002,15 @@ export function verifySheet(
       makeFinding({
         severity: "info",
         code: "timecard-not-claimed",
-        title: "Timecard day not claimed",
-        why: `A signed timecard covers ${fmtDate(date)} (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}) but the sheet claims nothing for it. Check whether the trainer missed the day.`,
+        title:
+          card.category === "report"
+            ? "Report-writing day not claimed"
+            : "Timecard day not claimed",
+        why:
+          `A signed timecard covers ${fmtDate(date)} (${covers.map((c) => `${c.timecard.activity} at ${c.timecard.unit}`).join("; ")}) but the sheet claims nothing for it. ` +
+          (card.category === "report"
+            ? "These are the office days added after the trip for writing the report — worked, but not days on the unit, so they are counted apart from the assessment days."
+            : "Check whether the trainer missed the day."),
         suggestion: rate === null ? null : `Add a ${SECTION_LABELS[band!]} day, ${sar(rate)}.`,
         // Same reasoning as the record-sheet side: a day both sources claim
         // is settled by a person, not by adding another tick to it.

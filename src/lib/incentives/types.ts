@@ -125,6 +125,17 @@ export interface SiteDistance {
  * timecard is the evidence instead: a client-signed card naming the assessor,
  * the unit, and the dates worked.
  */
+/**
+ * What a block of timecard days is for.
+ *
+ * A card often carries two rows: the days on the rig, and the days added
+ * afterwards for writing the report in the office. They are both worked days,
+ * but only the first is time spent assessing — "the timecard confirms eight
+ * days" means eight on the unit, not ten including the write-up — so the two
+ * are counted apart.
+ */
+export type TimecardCategory = "assessment" | "report" | "other";
+
 export interface Timecard {
   id: string;
   /** Assessor as the card names them; matched to an instructor by name. */
@@ -133,6 +144,7 @@ export interface Timecard {
   /** The rig, vessel or place the card is for — "ADM-687", "Report Writing". */
   unit: string;
   activity: string;
+  category: TimecardCategory;
   /** ISO yyyy-mm-dd. */
   start: string;
   end: string;
@@ -217,6 +229,13 @@ export interface IncentiveSheet {
   timeSheetName: string;
   verificationSheetName: string | null;
   headerRow: number;
+  /** Cell holding the instructor's name, so a generated sheet can fill it. */
+  instructorCell: string | null;
+  monthCell: string | null;
+  /** The grid's INITIALS column, cleared on a sheet nobody has verified. */
+  initialsColumn: string | null;
+  /** Cells beside "Verifier By" and "Approved by". */
+  signatureCells: string[];
   /** Day-of-month number for each grid column, in column order. */
   dayColumns: { day: number; column: string; nextMonth: boolean }[];
   rows: ClaimRow[];

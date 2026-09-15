@@ -42,6 +42,34 @@ visits so they only get built once:
 | **Sites & distances** | Every place name the month mentions. Anything that is not the NEFT centre is an outbound course, and the scheme pays outbound by distance — so the office types the kilometres in once per site, or marks it a rig or well, which takes the top band whatever the distance. |
 | **Timecards** | Rig competency assessment issues no certificates, so the record sheet has nothing for it. The client-signed timecard is the evidence instead: assessor, unit, dates, days, with the scan attached. |
 
+A card usually carries two rows — the days on the unit, and the days added
+afterwards for writing the report in the office — so each block says what it
+**counts as**. Both are worked and payable, but only the first is a day on the
+unit, so *"the timecard confirms eight days"* means eight, not ten, and the
+report-writing days are reported separately. Claiming one of them at the
+distance rate is an error the two-row card exists to catch.
+
+### Sheets that never arrived
+
+A claim nobody made is the one error a verifier cannot see: no sheet arrives,
+nothing is checked, and the trainer is not paid. **Not received** lists every
+trainer with sessions in the record sheet and no sheet uploaded — matched on the
+name, so "ASIF FARID" is not chased for a sheet already sent as "Asif Farid
+Israr Ulhaq" — with their days, sessions, participants and what the month comes
+to at the template's rates. Names that are not people (`Freelancer`, partner
+companies) can be left off the list and stay off in every month after.
+
+**Draft** writes each one on the template another trainer submitted: wiped of
+its ticks, its initials column and its signature cells, then filled from the
+record sheet and any timecards, with the verification log written from the same
+evidence. **Draft all** returns them as one `.zip`. In August that is 12 sheets
+covering 77 days and 8,400 SAR that nobody had claimed.
+
+A draft is a draft — what the record sheet says is owed, not what the trainer
+claims, and the two differ over a travelling day, a per diem, a class the
+certificates do not show. The file name says `drafted`; send it to be checked
+and signed, never straight to payroll.
+
 Each claimed day is priced against the sessions that instructor delivered that
 day, and the report names the cell, says why it has to change, and what it
 should say instead. The rules live in `src/lib/incentives/verify.ts`; the
@@ -115,7 +143,7 @@ days of multi-day courses. Off by default: it replaces what the trainer wrote.
 
 Feeding a generated sheet back through the verifier is the test that matters,
 and it is how the rules above were checked: ten of August's eleven come back
-with no errors at all. The eleventh is Ahmed Abubakr, whose timecard and record
+with no errors at all, and so do all twelve of the drafted ones. The eleventh is Ahmed Abubakr, whose timecard and record
 sheet contradict each other — which is the one thing the tool will not decide.
 
 **Getting it out.** The claim grid on screen is the report — a coloured tick is
