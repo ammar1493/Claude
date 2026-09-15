@@ -1245,7 +1245,7 @@ export function verifySheet(
     /* Duration written against what the course list says. */
     const resolved = entry.courseName
       ? catalog.lookupDetailed(entry.courseName)
-      : { course: null, candidates: [], ambiguous: false };
+      : { course: null, candidates: [], ambiguous: false, rule: null };
     const course = resolved.course;
     if (entry.courseName && resolved.ambiguous) {
       ambiguousCourses.push({ row: entry.rowIndex, written: entry.courseName, options: resolved.candidates });
@@ -1299,7 +1299,13 @@ export function verifySheet(
             claimedSar: null,
             suggestedSar: null,
             delta: null,
-            evidence: [`Course list: ${course.name} — ${course.label}`],
+            evidence: [
+              `Course list: ${course.name} — ${course.label}`,
+              /* A line the office's rule decided, rather than one entry of
+                 the list, says which rule it was — the trainer's answer to
+                 "which first aid course?" does not change the verdict. */
+              ...(resolved.rule ? [resolved.rule] : []),
+            ],
           }),
         );
       }

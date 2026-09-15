@@ -108,9 +108,15 @@ interesting ones are:
   teaching on a day a card covers, that is reported as a conflict and left
   unpriced — the trainer cannot be on a rig and in the classroom, and which
   record is wrong is not something the files can settle.
-- **Short-hand course names are not guessed at.** "first aid" matches five
-  courses in the list, one of them a full day, so the line is reported as
-  ambiguous rather than valued.
+- **Short-hand course names are not guessed at.** Where the courses a written
+  name matches disagree on how long they run, the line is reported as
+  ambiguous rather than valued. **First aid is the exception**, because the
+  office settled it by rule: five entries mention first aid and only the Saudi
+  Heart Association course is a full day, so a line naming SHA is that course
+  and a line that does not is one of the half days. In August that turns
+  *"first aid — fullday"* from a shrug into an over-claim with the cell to
+  correct. The rule narrows rather than decides: add a second full-day
+  first-aid course that is not SHA and the line goes back to being reported.
 - Names are matched on their consonant skeleton (`src/lib/incentives/names.ts`),
   which is what joins "Ahmed Ibrahim Aboubakr" to the record sheet's
   "Ahmed Abubakr" and "ASIF FARID" to "Asif Farid Israr Ulhaq".

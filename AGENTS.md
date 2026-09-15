@@ -42,6 +42,12 @@ row numbers, and dates, names, session numbers and durations all arrive in
 several spellings. Before changing a parsing rule, check it against every sheet
 in a month rather than the one that prompted the change.
 
+One course is settled by a rule of the office's rather than by the list: a
+first-aid line naming SHA is the Saudi Heart Association course, the one full
+day among the five, and a first-aid line that does not name it is a half day
+(`narrowFirstAid`). It is not an inference from the data — do not "fix" it
+back to reporting the ambiguity.
+
 The month's letter (`summaryDoc.ts`) is written the same way: the office's own
 `.docx` with its table rows replaced, one part of the zip changed. Its first
 data row is the prototype every row is cloned from and its last row is the

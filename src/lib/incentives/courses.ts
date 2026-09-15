@@ -44,6 +44,12 @@ export interface CourseLookup {
   candidates: CourseDuration[];
   /** True when the candidates disagree on how long the course is. */
   ambiguous: boolean;
+  /**
+   * Set when a rule of the office's decided the reading rather than the list
+   * doing it on its own, so a finding can say which rule it applied instead
+   * of citing one entry out of several that all agree.
+   */
+  rule: string | null;
 }
 
 /** Is `needle` a whole-word run inside `haystack`? Both already normalised. */
@@ -53,6 +59,51 @@ function containsWords(haystack: string, needle: string): boolean {
   const before = i === 0 || haystack[i - 1] === " ";
   const after = i + needle.length === haystack.length || haystack[i + needle.length] === " ";
   return before && after;
+}
+
+/**
+ * Saudi Heart Association, as the list and the trainers write it.
+ *
+ * Applied to an already-normalised key, so the list's
+ * "BASIC FIRST AID SAUDI HEART ASSOCIATION (SHA)" has lost its brackets by
+ * the time this sees it. "Frst Aid Saudi Heart Association" — the spelling on
+ * the sheets' own course list — is caught by the second half.
+ */
+const SAUDI_HEART = /\bSHA\b|\bSAUDI HEART\b/;
+
+/**
+ * What the first-aid rule says, in the words a trainer is answered with.
+ * A finding that applied it prints this rather than citing one of the four
+ * half-day entries as though the line had named it.
+ */
+const FIRST_AID_RULE =
+  "Read under the first-aid rule: of the courses that mention first aid, only " +
+  "BASIC FIRST AID SAUDI HEART ASSOCIATION (SHA) is a full day.";
+
+/** "FRST AID" is the spelling on the sheets' own course list. */
+const FIRST_AID = /\b(?:FIRST|FRST) AID\b/;
+
+/**
+ * First aid is one name over two prices.
+ *
+ * Five entries in the master list mention first aid and exactly one of them
+ * is a full day: the Saudi Heart Association course, which everyone writes as
+ * SHA. So the office's rule is that a first-aid line naming SHA is that
+ * course and a line that does not is one of the half days — which is why
+ * "first aid" on its own is now valued at half a day instead of being
+ * reported as ambiguous.
+ *
+ * This narrows rather than decides: if the list ever gains a second full-day
+ * first-aid course that is not SHA, the candidates disagree again and the
+ * line goes back to being reported.
+ */
+function narrowFirstAid(key: string, candidates: CourseDuration[]): CourseDuration[] {
+  if (!FIRST_AID.test(key)) return candidates;
+  const wantsSaudiHeart = SAUDI_HEART.test(key);
+  const narrowed = candidates.filter(
+    (c) => SAUDI_HEART.test(normaliseCourseKey(c.name)) === wantsSaudiHeart,
+  );
+  return narrowed.length ? narrowed : candidates;
 }
 
 export class CourseCatalog {
@@ -75,30 +126,46 @@ export class CourseCatalog {
    * "WELLSHARP - WIRELINE" in the list.
    *
    * Short-hand is the reason this returns candidates rather than a single
-   * answer. "first aid" covers five courses in the list, one of which is a
-   * full day and four of which are half days — picking one of those would
-   * invent a verdict, so the ambiguity is reported instead and the trainer is
-   * asked to write the course out.
+   * answer: where the matches disagree on how long the course runs, the
+   * ambiguity is reported and the trainer is asked to write the course out
+   * rather than a verdict being invented. First aid is the exception the
+   * office settled by rule — see narrowFirstAid().
    */
   lookupDetailed(name: string): CourseLookup {
     const key = normaliseCourseKey(name);
-    if (!key) return { course: null, candidates: [], ambiguous: false };
+    if (!key) return { course: null, candidates: [], ambiguous: false, rule: null };
     const exact = this.byKey.get(key);
-    if (exact) return { course: exact, candidates: [exact], ambiguous: false };
+    if (exact) return { course: exact, candidates: [exact], ambiguous: false, rule: null };
+
+    /* The other half of the first-aid rule. "first aid SHA" shares no run of
+       words with "BASIC FIRST AID SAUDI HEART ASSOCIATION (SHA)", so the
+       matching below would find nothing at all; naming SHA is the office
+       saying which course it is, and there is only one it can be. */
+    if (FIRST_AID.test(key) && SAUDI_HEART.test(key)) {
+      const sha = this.courses.filter((c) => {
+        const k = normaliseCourseKey(c.name);
+        return FIRST_AID.test(k) && SAUDI_HEART.test(k);
+      });
+      if (sha.length === 1) {
+        return { course: sha[0], candidates: sha, ambiguous: false, rule: FIRST_AID_RULE };
+      }
+    }
 
     const candidates: CourseDuration[] = [];
     for (const [k, c] of this.byKey) {
       if (k.length < 6) continue;
       if (containsWords(key, k) || (key.length >= 6 && containsWords(k, key))) candidates.push(c);
     }
-    if (!candidates.length) return { course: null, candidates: [], ambiguous: false };
+    if (!candidates.length) return { course: null, candidates: [], ambiguous: false, rule: null };
 
-    const durations = new Set(candidates.map((c) => c.days));
-    if (durations.size > 1) return { course: null, candidates, ambiguous: true };
+    const narrowed = narrowFirstAid(key, candidates);
+    const rule = narrowed.length === candidates.length ? null : FIRST_AID_RULE;
+    const durations = new Set(narrowed.map((c) => c.days));
+    if (durations.size > 1) return { course: null, candidates: narrowed, ambiguous: true, rule };
     // All the same length, so the shortest name — the most specific reading of
     // what was written — stands in for the group.
-    const course = candidates.reduce((best, c) => (c.name.length < best.name.length ? c : best));
-    return { course, candidates, ambiguous: false };
+    const course = narrowed.reduce((best, c) => (c.name.length < best.name.length ? c : best));
+    return { course, candidates: narrowed, ambiguous: false, rule };
   }
 
   lookup(name: string): CourseDuration | null {
