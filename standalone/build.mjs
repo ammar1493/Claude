@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import path from "node:path";
 
@@ -37,12 +37,15 @@ mkdirSync(path.join(out, "brand"), { recursive: true });
 copyFileSync(path.join(root, "public/brand/neft-logo.png"), path.join(out, "brand/neft-logo.png"));
 copyFileSync(path.join(root, "standalone/index.html"), path.join(out, "index.html"));
 
-// The blank NE-HR050 form and the incentives letter. They are fetched at run
-// time rather than bundled, so they have to travel beside app.js.
+// The blank NE-HR050 form and the incentives letter, packed as base64 in one
+// .json: they are fetched at run time rather than bundled, and the artifact
+// host will not serve a .xlsx.
+execSync("node scripts/build-templates.mjs", { cwd: root, stdio: "inherit" });
 mkdirSync(path.join(out, "templates"), { recursive: true });
-for (const f of readdirSync(path.join(root, "public/templates"))) {
-  copyFileSync(path.join(root, "public/templates", f), path.join(out, "templates", f));
-}
+copyFileSync(
+  path.join(root, "public/templates/index.json"),
+  path.join(out, "templates/index.json"),
+);
 
 const size = (f) => (readFileSync(path.join(out, f)).length / 1024).toFixed(0);
 console.log(`app.js ${size("app.js")} KB · styles.css ${size("styles.css")} KB`);
