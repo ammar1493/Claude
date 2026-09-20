@@ -69,9 +69,12 @@ const fmtDays = (n: number) =>
   n === 0 ? "nothing" : n === 0.5 ? "half a day" : n === 1 ? "a full day" : `${n} days`;
 
 const sar = (n: number) => `${Math.round(n).toLocaleString("en-US")} SAR`;
-/** Same, but keeping a half riyal — the freelance half day is 37.5, not 38. */
+/** Same, but keeping a half riyal — a converted allowance is rarely round. */
 const sarExact = (n: number) =>
   `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} SAR`;
+/** The freelance allowance is quoted in dollars; the half day is 37.5, not 38. */
+const usdExact = (n: number) =>
+  `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 
 function describeBlock(b: TeachingBlock): string {
   const names = b.courseNames.join(" + ") || "(unnamed course)";
@@ -1717,7 +1720,9 @@ export function verifySheet(
     const halves = [...dayReports.values()].filter(
       (d) => (d.payableDays ?? 0) > 0 && (d.payableDays ?? 0) < 0.999,
     ).length;
-    const owed = full * freelanceRates.day + halves * freelanceRates.half;
+    const usd = full * freelanceRates.day + halves * freelanceRates.half;
+    const rate = freelanceRates.sarPerUsd || DEFAULT_FREELANCE_RATES.sarPerUsd;
+    const owed = usd * rate;
     freelanceTotal = owed;
     findings.push(
       makeFinding({
@@ -1727,13 +1732,14 @@ export function verifySheet(
         // that no longer applies.
         severity: "info",
         code: "freelance",
-        title: `Freelance rates: ${fmtDays(payableDays)} at ${sarExact(freelanceRates.day)} a day`,
+        title: `Freelance rates: ${fmtDays(payableDays)} at ${usdExact(freelanceRates.day)} a day`,
         why:
           `This instructor is marked as a freelancer, so the rate table printed on the form does not apply to them. ` +
-          `The month comes to ${full} full day${full === 1 ? "" : "s"} at ${sar(freelanceRates.day)}` +
-          (halves ? ` and ${halves} half day${halves === 1 ? "" : "s"} at ${sarExact(freelanceRates.half)}` : "") +
-          `, which is ${sarExact(owed)} against the ${sar(computedTotal)} the ticks add up to at staff rates.`,
-        suggestion: `Pay ${sarExact(owed)} at the freelance teaching allowance.`,
+          `The month comes to ${full} full day${full === 1 ? "" : "s"} at ${usdExact(freelanceRates.day)}` +
+          (halves ? ` and ${halves} half day${halves === 1 ? "" : "s"} at ${usdExact(freelanceRates.half)}` : "") +
+          `, which is ${usdExact(usd)}. ` +
+          `Everything else here is in riyals, so at ${rate} to the dollar that is ${sarExact(owed)}, against the ${sar(computedTotal)} the ticks add up to at staff rates.`,
+        suggestion: `Pay ${sarExact(owed)} \u2014 ${usdExact(usd)} at the freelance teaching allowance.`,
         sheet: "timesheet",
         cells: [],
         date: null,
@@ -1741,7 +1747,8 @@ export function verifySheet(
         suggestedSar: owed,
         delta: null,
         evidence: [
-          `Freelance teaching allowance: ${sarExact(freelanceRates.day)} a day, ${sarExact(freelanceRates.half)} a half day`,
+          `Freelance teaching allowance: ${usdExact(freelanceRates.day)} a day, ${usdExact(freelanceRates.half)} a half day`,
+          `Converted at ${rate} SAR to the US dollar`,
         ],
       }),
     );

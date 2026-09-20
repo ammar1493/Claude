@@ -385,8 +385,24 @@ export interface TrainerTerms {
 
 /** The freelance teaching allowance, in the same currency as the sheets. */
 export interface FreelanceRates {
+  /** Teaching allowance for a full day, in US dollars. */
   day: number;
+  /** ...and for a half day. */
   half: number;
+  /**
+   * Riyals to the dollar.
+   *
+   * The sheets, the record sheet and the letter are all in riyals, and a
+   * total that mixed two currencies would mean nothing, so the allowance is
+   * converted before it is added to anything. The default is the peg the
+   * riyal has been held at for decades rather than a rate of the day \u2014 but
+   * it is editable, because the office may settle at a different one.
+   */
+  sarPerUsd: number;
 }
 
-export const DEFAULT_FREELANCE_RATES: FreelanceRates = { day: 75, half: 37.5 };
+export const DEFAULT_FREELANCE_RATES: FreelanceRates = {
+  day: 75,
+  half: 37.5,
+  sarPerUsd: 3.75,
+};

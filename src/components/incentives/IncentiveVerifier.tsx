@@ -131,7 +131,9 @@ export function IncentiveVerifier() {
       if (savedDecisions) setDecisions(savedDecisions);
       if (savedLetter) setLetterTemplate({ name: savedLetter.name, data: savedLetter.data });
       if (savedFreelancers?.length) setFreelancers(savedFreelancers);
-      if (savedRates) setFreelanceRates(savedRates);
+      // Rates saved before the allowance was known to be in dollars carry no
+      // conversion, so the default peg fills itself in rather than reading NaN.
+      if (savedRates) setFreelanceRates({ ...DEFAULT_FREELANCE_RATES, ...savedRates });
       if (rec) setRecord({ name: rec.name, data: rec.data });
       if (cou) setCourses({ name: cou.name, data: cou.data });
       if (all.length) {
@@ -1183,10 +1185,15 @@ function SummaryTable({
           <span className="min-w-0 flex-1">
             {freelancers.length} trainer{freelancers.length === 1 ? " is" : "s are"} on the
             freelance teaching allowance, so the rate table printed on the form does not apply to
-            {freelancers.length === 1 ? " them" : " them"}. Their days are valued here instead.
+            them. The allowance is in dollars and everything else here is in riyals, so it is
+            converted before it is added to anything:{" "}
+            <strong className="text-navy">
+              ${rates.day} a day is {sar(rates.day * rates.sarPerUsd)} SAR
+            </strong>
+            .
           </span>
           <label className="flex items-center gap-1.5 text-xs font-bold text-navy">
-            Day
+            $ / day
             <input
               type="number"
               min={0}
@@ -1197,13 +1204,29 @@ function SummaryTable({
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs font-bold text-navy">
-            Half day
+            $ / half
             <input
               type="number"
               min={0}
               step="0.5"
               value={rates.half}
               onChange={(e) => onRates({ ...rates, half: Number(e.target.value) || 0 })}
+              className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+            />
+          </label>
+          <label
+            className="flex items-center gap-1.5 text-xs font-bold text-navy"
+            title="Riyals to the dollar. 3.75 is the peg; change it if the office settles at another rate."
+          >
+            SAR / $
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={rates.sarPerUsd}
+              onChange={(e) =>
+                onRates({ ...rates, sarPerUsd: Number(e.target.value) || 0 })
+              }
               className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
             />
           </label>

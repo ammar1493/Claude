@@ -63,6 +63,13 @@ full-day line, which is worth the same; and a multi-day course is one log
 line per day at Full Day, because the Duration column is a dropdown of
 Half Day / Full Day / Outbound and "4 Days" is not one of them.
 
+The freelance teaching allowance is quoted in **US dollars** ($75 a day,
+$37.50 a half day) while every other figure in the app is in riyals, so
+`FreelanceRates.sarPerUsd` converts it before it reaches a total — default
+3.75, the peg, and editable. Anything that shows the allowance shows the
+dollars and the conversion both; anything that adds it to another figure uses
+the riyals.
+
 Freelancers are priced by `freelanceTotal`, which **replaces** the staff rate
 arithmetic rather than adjusting it — the finding carries no delta, and
 `verifiedTotal` and `payableTotal` return it directly. Adding a delta on top

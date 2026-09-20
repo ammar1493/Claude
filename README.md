@@ -194,10 +194,12 @@ a flat rate a day and half of it for a half day, wherever the course ran, so
 re-priced from the days that survived verification rather than from the lines
 they were ticked on. It is remembered per person, like their site distances.
 
-The allowance defaults to 75 a day and 37.5 a half day, in the same currency
-as the sheets, and both figures are editable above the table — if the 75 is
-dollars rather than riyals, put the converted figure in and the letter stays
-one currency.
+The allowance is **$75 a day and $37.50 a half day**, and it is in dollars
+while the sheets, the record sheet and the letter are all in riyals. A total
+mixing the two would mean nothing, so it is converted before it is added to
+anything: **3.75 riyals to the dollar**, the peg, which makes $75 a day 281.25
+SAR. All three figures are editable above the table, the rate included, for a
+month the office settles at something else.
 
 Because it replaces the rate table rather than correcting it, a freelancer's
 figure is not the total their corrected workbook computes: that workbook is
