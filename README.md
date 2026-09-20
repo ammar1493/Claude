@@ -25,15 +25,17 @@ using the same aggregation rules so the numbers match.
 ## Incentive verification
 
 `/incentives` checks the time sheets trainers submit for their monthly
-incentive against what they actually taught. It takes four files, all read in
-the browser:
+incentive against what they actually taught. The form it checks is **NE-HR050
+Training Operations Incentive Form 2026**, which ships with the app — nothing
+has to be uploaded to draft a sheet or write the month's letter. It reads up
+to four files, all in the browser:
 
 | File | What it is |
 | --- | --- |
 | Record sheet | The month's certificate export — `CertNo`, `StudentName`, `ClientName`, `InstructorName`, `PrintedCourseName`, `IssuedOn`, `Location`, `SessionNo`, `RigNo`. Evidence that a session ran. |
 | Courses Duration | `Course Name` / `Duration`, where duration is `Half Day`, `1 Full Day` or `N Days`. |
 | Incentive sheets | The trainers' workbooks — a `.zip` of them, or the `.xlsx` files. Each has a claim grid (rate lines down, days of the month across) and a verification log (one line per session). |
-| Incentives letter | Last month's *Monthly Incentives — Instructors* letter, in Word. Optional, and only needed at the end: it is the template the month's letter is written on. |
+| Incentives letter | Optional. The *Monthly Incentives — Instructors* letter is built in and its month is filled from the record sheet; upload one only to write on a different template. |
 
 Two reference tables fill the gaps the first three leave, and both are kept
 between visits so they only get built once:
@@ -108,6 +110,26 @@ interesting ones are:
   teaching on a day a card covers, that is reported as a conflict and left
   unpriced — the trainer cannot be on a rig and in the classroom, and which
   record is wrong is not something the files can settle.
+- **A weekend day with no course is standby, not an invention.** A trainer
+  called in for a Friday or Saturday course that then does not run has given
+  up the day, and the scheme pays half the weekend rate for it. It is the one
+  case where a claim with nothing behind it is correct, so it is settled
+  before the rules that would read the empty day as unsupported — and a full
+  day claimed for it comes back as an over-claim. Only Friday and Saturday,
+  and only at the centre: the distance bands carry their own
+  Traveling/Standby line, which is what a trainer who drove 400 km is owed.
+- **Two half-day classes on a weekday are a morning and an afternoon.** The
+  form has a line for each, and 50 plus 50 is the same 100 as the full-day
+  line, so nobody is paid differently — but a sheet that says "full day"
+  cannot be read against a log that says two classes.
+- **A multi-day course is one line per day, each a full day.** "4 Days" in the
+  Duration cell describes the course, not the day the line is dated; the grid
+  has a tick on each of the four. NE-HR050's Duration column is a dropdown
+  offering Half Day, Full Day and Outbound, so there is no cell to write
+  "4 Days" into any more.
+- **Travelling and teaching cannot both be claimed for one day.** The form's
+  own standards say so in as many words, and the record sheet decides which
+  one stands.
 - **Short-hand course names are not guessed at.** Where the courses a written
   name matches disagree on how long they run, the line is reported as
   ambiguous rather than valued. **First aid is the exception**, because the
@@ -162,6 +184,44 @@ Feeding a generated sheet back through the verifier is the test that matters,
 and it is how the rules above were checked: ten of August's eleven come back
 with no errors at all, and so do all twelve of the drafted ones. The eleventh is Ahmed Abubakr, whose timecard and record
 sheet contradict each other — which is the one thing the tool will not decide.
+
+### Freelancers
+
+The rates printed on the form — 50 for a morning, 100 for a day at the
+centre, 250 for a rig — are staff rates. A freelancer's teaching allowance is
+a flat rate a day and half of it for a half day, wherever the course ran, so
+**Terms** on the summary is one click per trainer and their whole month is
+re-priced from the days that survived verification rather than from the lines
+they were ticked on. It is remembered per person, like their site distances.
+
+The allowance defaults to 75 a day and 37.5 a half day, in the same currency
+as the sheets, and both figures are editable above the table — if the 75 is
+dollars rather than riyals, put the converted figure in and the letter stays
+one currency.
+
+Because it replaces the rate table rather than correcting it, a freelancer's
+figure is not the total their corrected workbook computes: that workbook is
+their own form, and the form pays staff rates. The letter and the report take
+the allowance; the workbook stays the trainer's sheet with the ticks put right.
+
+### Colouring the days
+
+The form prints two swatches beside the words Friday and Saturday and the
+instruction *"Highlight in above listed colors for days"*. Trainers were doing
+it by hand, which is why so few sheets had it done consistently, so the
+corrected and drafted workbooks now do it: **Friday yellow (FFFF00)** and
+**Saturday light green (A9D18E)** in both tabs, taken out of the template's own
+legend rather than picked to match, and **light blue (DEEBF7)** on the claim
+grid for the other days that were taught. The day numbers along the top of the
+grid are coloured too, so an empty yellow column is a Friday nobody worked
+rather than a Friday nobody noticed.
+
+Writing a fill is not the same as writing a value: the cell carries an index
+into `cellXfs`, and that record points at a fill, a font, a border and a
+number format at once. `StyleTable` in `xlsxEdit.ts` finds the record that is
+the cell's own formatting plus the colour, appends it if it does not exist,
+and leaves every other record alone — so the rest of the workbook keeps
+pointing at exactly the style it pointed at before.
 
 ### The month's letter
 

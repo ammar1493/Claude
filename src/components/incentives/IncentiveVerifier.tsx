@@ -13,10 +13,17 @@ import {
 } from "@/lib/incentives/generate";
 import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
 import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
-import { buildSummaryDoc, describeSummaryTemplate } from "@/lib/incentives/summaryDoc";
+import {
+  buildBeforeAfterDoc,
+  buildSummaryDoc,
+  describeSummaryTemplate,
+} from "@/lib/incentives/summaryDoc";
+import { loadTemplate, templateLabel } from "@/lib/incentives/templates";
 import { parseIncentiveSheet } from "@/lib/incentives/timesheet";
+import { DEFAULT_FREELANCE_RATES } from "@/lib/incentives/types";
 import type {
   Decision,
+  FreelanceRates,
   IncentiveSheet,
   SiteDistance,
   SheetReport,
@@ -80,6 +87,13 @@ export function IncentiveVerifier() {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [letterTemplate, setLetterTemplate] = useState<StoredFile | null>(null);
   const [templateName, setTemplateName] = useState<string | null>(null);
+  /*
+   * Who is a freelancer. Held by the instructor's name as the record sheet
+   * writes it, beside the distances and the timecards, because it is a fact
+   * about the person and not about any one month's sheet.
+   */
+  const [freelancers, setFreelancers] = useState<string[]>([]);
+  const [freelanceRates, setFreelanceRates] = useState<FreelanceRates>(DEFAULT_FREELANCE_RATES);
 
   /* The three workbooks stay in the browser between visits — the record sheet
      and the course list barely change month to month, and re-uploading them to
@@ -96,6 +110,8 @@ export function IncentiveVerifier() {
         savedExcluded,
         savedDecisions,
         savedLetter,
+        savedFreelancers,
+        savedRates,
       ] = await Promise.all([
         getWorkbook("record"),
         getWorkbook("courses"),
@@ -105,6 +121,8 @@ export function IncentiveVerifier() {
         getSetting<string[]>("incentive:excluded"),
         getSetting<Record<string, Decision>>("incentive:decisions"),
         getWorkbook("lettertemplate"),
+        getSetting<string[]>("incentive:freelancers"),
+        getSetting<FreelanceRates>("incentive:freelanceRates"),
       ]);
       if (cancelled) return;
       if (savedSites?.length) setSites(savedSites);
@@ -112,6 +130,8 @@ export function IncentiveVerifier() {
       if (savedExcluded?.length) setExcluded(savedExcluded);
       if (savedDecisions) setDecisions(savedDecisions);
       if (savedLetter) setLetterTemplate({ name: savedLetter.name, data: savedLetter.data });
+      if (savedFreelancers?.length) setFreelancers(savedFreelancers);
+      if (savedRates) setFreelanceRates(savedRates);
       if (rec) setRecord({ name: rec.name, data: rec.data });
       if (cou) setCourses({ name: cou.name, data: cou.data });
       if (all.length) {
@@ -183,16 +203,36 @@ export function IncentiveVerifier() {
     const rec = parsedRecord.value;
     const cat = parsedCourses.value;
     if (!rec || !cat) return [];
-    const out = parsedSheets.parsed.map((sheet) =>
-      verifySheet(sheet, rec, cat, { sites: siteTable, timecards }),
-    );
+    const isFreelance = (name: string) =>
+      freelancers.some((f) => siteKey(f) === siteKey(name));
+    const out = parsedSheets.parsed.map((sheet) => {
+      const first = verifySheet(sheet, rec, cat, { sites: siteTable, timecards });
+      // The record sheet's spelling of the name is the one the office ticks
+      // against, so the terms are looked up after the match is known.
+      const who = first.matchedInstructor ?? first.sheet.instructorName;
+      if (!isFreelance(who)) return first;
+      return verifySheet(sheet, rec, cat, {
+        sites: siteTable,
+        timecards,
+        freelance: true,
+        freelanceRates,
+      });
+    });
     out.sort((a, b) =>
       (a.matchedInstructor ?? a.sheet.instructorName).localeCompare(
         b.matchedInstructor ?? b.sheet.instructorName,
       ),
     );
     return out;
-  }, [parsedSheets.parsed, parsedRecord.value, parsedCourses.value, siteTable, timecards]);
+  }, [
+    parsedSheets.parsed,
+    parsedRecord.value,
+    parsedCourses.value,
+    siteTable,
+    timecards,
+    freelancers,
+    freelanceRates,
+  ]);
 
   const failures = parsedSheets.failures;
 
@@ -236,14 +276,37 @@ export function IncentiveVerifier() {
     async (names: string[]): Promise<GeneratedSheet[]> => {
       const rec = parsedRecord.value;
       const cat = parsedCourses.value;
-      if (!rec || !cat || !template) return [];
-      const file = sheets.find((f) => f.name === template.fileName);
-      if (!file) throw new Error("The template workbook is no longer in this browser.");
+      if (!rec || !cat) return [];
+
+      /*
+       * The blank form first, a submitted sheet only if the office picked one.
+       *
+       * Drafting used to mean copying whichever trainer had already sent a
+       * sheet and rubbing out their ticks. NE-HR050 ships with the app now, so
+       * a drafted sheet starts life as the real blank \u2014 nothing of anybody
+       * else's claim is in it to be missed.
+       */
+      const chosen = templateName ? template : null;
+      const source = chosen
+        ? { data: sheets.find((f) => f.name === chosen.fileName)?.data ?? null, sheet: chosen }
+        : await (async () => {
+            const data = await loadTemplate("incentive-form");
+            return { data, sheet: parseIncentiveSheet(templateLabel("incentive-form"), data) };
+          })();
+      if (!source.data) throw new Error("The template workbook is no longer in this browser.");
 
       const out: GeneratedSheet[] = [];
       for (const name of names) {
         out.push(
-          await buildGeneratedWorkbook(file.data, template, name, rec, cat, siteTable, timecards),
+          await buildGeneratedWorkbook(
+            source.data,
+            source.sheet,
+            name,
+            rec,
+            cat,
+            siteTable,
+            timecards,
+          ),
         );
       }
 
@@ -268,7 +331,7 @@ export function IncentiveVerifier() {
 
       return out;
     },
-    [parsedRecord.value, parsedCourses.value, template, sheets, siteTable, timecards],
+    [parsedRecord.value, parsedCourses.value, template, templateName, sheets, siteTable, timecards],
   );
 
   const decide = useCallback((id: string, decision: Decision) => {
@@ -491,8 +554,13 @@ export function IncentiveVerifier() {
 
   const openQuestions = [...undecided.values()].reduce((a, b) => a + b, 0);
 
+  /** The uploaded letter if the office gave us one, else the one we ship. */
+  const letterData = useCallback(
+    async () => letterTemplate?.data ?? (await loadTemplate("monthly-incentives")),
+    [letterTemplate],
+  );
+
   const makeLetter = useCallback(async () => {
-    if (!letterTemplate) return;
     setBusy("letter-out");
     setError(null);
     try {
@@ -502,7 +570,7 @@ export function IncentiveVerifier() {
           amount: payable.get(r.sheet.fileName) ?? r.computedTotal,
         }))
         .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
-      const out = await buildSummaryDoc(letterTemplate.data, rows, monthLabel || "");
+      const out = await buildSummaryDoc(await letterData(), rows, monthLabel || "");
       await saveFile(
         out.fileName,
         new Blob([out.data as BlobPart], {
@@ -514,7 +582,56 @@ export function IncentiveVerifier() {
     } finally {
       setBusy(null);
     }
-  }, [letterTemplate, reports, payable, monthLabel]);
+  }, [letterData, reports, payable, monthLabel]);
+
+  /**
+   * The month before and after checking.
+   *
+   * The letter answers "what is each trainer paid". This answers "what
+   * changed, and whose figure did nobody submit" \u2014 which is the question
+   * anybody signing the letter asks next.
+   */
+  const makeReport = useCallback(async () => {
+    setBusy("report-out");
+    setError(null);
+    try {
+      const rows = reports
+        .map((r) => ({
+          name: r.sheet.instructorName || r.matchedInstructor || r.sheet.fileName,
+          before: r.claimedTotal,
+          after: payable.get(r.sheet.fileName) ?? r.verifiedTotal,
+          drafted: draftedNames.has(r.sheet.fileName),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+      const out = await buildBeforeAfterDoc(await letterData(), rows, monthLabel || "");
+      await saveFile(
+        out.fileName,
+        new Blob([out.data as BlobPart], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }, [letterData, reports, payable, draftedNames, monthLabel]);
+
+  const saveFreelanceRates = useCallback((next: FreelanceRates) => {
+    setFreelanceRates(next);
+    void putSetting("incentive:freelanceRates", next);
+  }, []);
+
+  const setFreelance = useCallback((name: string, freelance: boolean) => {
+    setFreelancers((prev) => {
+      const key = siteKey(name);
+      const next = freelance
+        ? [...prev.filter((n) => siteKey(n) !== key), name].sort()
+        : prev.filter((n) => siteKey(n) !== key);
+      void putSetting("incentive:freelancers", next);
+      return next;
+    });
+  }, []);
 
   const totals = useMemo(() => {
     const claimed = reports.reduce((s, r) => s + r.claimedTotal, 0);
@@ -559,7 +676,17 @@ export function IncentiveVerifier() {
                   <Icon name="download" size={14} />
                   Findings workbook
                 </button>
-                {letterTemplate && (
+                <button
+                  type="button"
+                  onClick={() => void makeReport()}
+                  disabled={busy === "report-out"}
+                  title="Every sheet, claimed against verified — including the ones nobody sent."
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy disabled:opacity-50"
+                >
+                  <Icon name="document" size={14} />
+                  Before / after
+                </button>
+                {(
                   <button
                     type="button"
                     onClick={() => void makeLetter()}
@@ -687,7 +814,7 @@ export function IncentiveVerifier() {
 
           <FileSlot
             title="Incentives letter"
-            hint="Last month's Monthly Incentives letter, in Word. Its own table, colours and signature block are reused — only the names and figures change."
+            hint="Optional. The app carries the Monthly Incentives letter and fills in the month itself — drop a .docx here only to write on a different one."
             icon="document"
             accept=".docx"
             loaded={Boolean(letterTemplate)}
@@ -698,15 +825,16 @@ export function IncentiveVerifier() {
               setLetterTemplate(null);
             }}
           >
-            {letterTemplate && (
-              <p className="text-xs leading-relaxed text-slate-ink">
-                <span className="font-bold text-navy">{letterTemplate.name}</span>
-                <br />
-                {reports.length > 0
-                  ? `${reports.length} row${reports.length === 1 ? "" : "s"} to write`
-                  : "Waiting for the sheets"}
-              </p>
-            )}
+            <p className="text-xs leading-relaxed text-slate-ink">
+              <span className="font-bold text-navy">
+                {letterTemplate ? letterTemplate.name : templateLabel("monthly-incentives")}
+              </span>
+              <br />
+              {letterTemplate ? "Yours, in place of the built-in one" : "Built in"}
+              {reports.length > 0
+                ? ` \u00b7 ${reports.length} row${reports.length === 1 ? "" : "s"} to write`
+                : ""}
+            </p>
           </FileSlot>
         </section>
 
@@ -848,6 +976,10 @@ export function IncentiveVerifier() {
                 drafted={draftedNames}
                 payable={payable}
                 undecided={undecided}
+                freelancers={freelancers}
+                onFreelance={setFreelance}
+                rates={freelanceRates}
+                onRates={saveFreelanceRates}
                 letterReady={Boolean(letterTemplate)}
                 openQuestions={openQuestions}
                 onLetter={() => void makeLetter()}
@@ -911,6 +1043,10 @@ function SummaryTable({
   drafted,
   payable,
   undecided,
+  freelancers,
+  onFreelance,
+  rates,
+  onRates,
   letterReady,
   openQuestions,
   onLetter,
@@ -930,6 +1066,12 @@ function SummaryTable({
   payable: Map<string, number>;
   /** Per file: findings nobody has ruled on yet. */
   undecided: Map<string, number>;
+  /** Instructors paid the freelance allowance rather than the form's rates. */
+  freelancers: string[];
+  onFreelance: (name: string, freelance: boolean) => void;
+  /** The freelance teaching allowance, which the office sets. */
+  rates: FreelanceRates;
+  onRates: (next: FreelanceRates) => void;
   letterReady: boolean;
   openQuestions: number;
   onLetter: () => void;
@@ -939,6 +1081,9 @@ function SummaryTable({
   onRemove: (name: string) => void;
 }) {
   const difference = totals.verified - totals.claimed;
+  const who = (r: SheetReport) => r.matchedInstructor ?? r.sheet.instructorName;
+  const isFreelance = (r: SheetReport) =>
+    freelancers.some((f) => siteKey(f) === siteKey(who(r)));
   return (
     <div className="space-y-4">
       {letterReady && (
@@ -1032,13 +1177,46 @@ function SummaryTable({
         ))}
       </div>
 
+      {freelancers.length > 0 && (
+        <div className="no-print surface-card flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink">
+          <Icon name="info" size={16} className="shrink-0 text-gold" />
+          <span className="min-w-0 flex-1">
+            {freelancers.length} trainer{freelancers.length === 1 ? " is" : "s are"} on the
+            freelance teaching allowance, so the rate table printed on the form does not apply to
+            {freelancers.length === 1 ? " them" : " them"}. Their days are valued here instead.
+          </span>
+          <label className="flex items-center gap-1.5 text-xs font-bold text-navy">
+            Day
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              value={rates.day}
+              onChange={(e) => onRates({ ...rates, day: Number(e.target.value) || 0 })}
+              className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs font-bold text-navy">
+            Half day
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              value={rates.half}
+              onChange={(e) => onRates({ ...rates, half: Number(e.target.value) || 0 })}
+              className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+            />
+          </label>
+        </div>
+      )}
+
       <Card title={`Every sheet — ${monthLabel}`} tone="marked" inset>
         <div className="neft-scroll overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="text-left text-[11px] font-bold tracking-wide text-slate-ink uppercase">
                 <th className="border-b border-hairline px-2 py-2">Instructor</th>
-                <th className="border-b border-hairline px-2 py-2">Sheet</th>
+                <th className="border-b border-hairline px-2 py-2">Terms</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">Claimed</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">Verified</th>
                 <th className="border-b border-hairline px-2 py-2 text-right">To pay</th>
@@ -1059,7 +1237,10 @@ function SummaryTable({
                     className="cursor-pointer hover:bg-navy-050/50"
                     onClick={() => onOpen(i)}
                   >
-                    <td className="border-b border-hairline px-2 py-2 font-bold text-navy">
+                    <td
+                      title={r.sheet.fileName}
+                      className="border-b border-hairline px-2 py-2 font-bold text-navy"
+                    >
                       {r.matchedInstructor ?? r.sheet.instructorName}
                       {!r.matchedInstructor && (
                         <span className={`ms-2 rounded px-1.5 py-0.5 text-[10px] ${SEVERITY.warning.chip}`}>
@@ -1075,8 +1256,30 @@ function SummaryTable({
                         </span>
                       )}
                     </td>
-                    <td className="max-w-[280px] truncate border-b border-hairline px-2 py-2 text-xs text-slate-ink">
-                      {r.sheet.fileName}
+                    <td className="no-print border-b border-hairline px-2 py-2">
+                      {/* One click per trainer. A freelancer is not on the
+                          form's rate table at all, so this changes what every
+                          day of their month is worth. */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFreelance(who(r), !isFreelance(r));
+                        }}
+                        aria-pressed={isFreelance(r)}
+                        title={
+                          isFreelance(r)
+                            ? "Paid the freelance teaching allowance. Click for staff rates."
+                            : "Paid from the rate table on the form. Click for freelance rates."
+                        }
+                        className={`rounded-md px-2 py-1 text-[11px] font-bold transition-colors duration-150 ${
+                          isFreelance(r)
+                            ? "bg-gold text-navy"
+                            : "bg-navy-050 text-navy hover:bg-navy hover:text-white"
+                        }`}
+                      >
+                        {isFreelance(r) ? "Freelance" : "Staff"}
+                      </button>
                     </td>
                     <td className="border-b border-hairline px-2 py-2 text-right tabular-nums text-navy">
                       {sar(r.claimedTotal)}

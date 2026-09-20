@@ -14,6 +14,10 @@ export function parseDurationLabel(raw: unknown): number | null {
   const s = cellToString(raw).toLowerCase().replace(/\s+/g, " ").trim();
   if (!s) return null;
   if (/half/.test(s)) return 0.5;
+  /* NE-HR050 offers Half Day / Full Day / Outbound in the Duration dropdown.
+     Outbound is a day at a distance band, and those bands have no half-day
+     line, so it is a whole day. */
+  if (/^outbound\b/.test(s)) return 1;
   const days = /(\d+(?:\.\d+)?)\s*(?:full\s*)?day/.exec(s);
   if (days) {
     const n = Number(days[1]);

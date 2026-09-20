@@ -395,3 +395,145 @@ function unescapeXmlAttr(text: string): string {
 export async function saveWorkbook(book: OpenWorkbook): Promise<Uint8Array> {
   return writeZip(book.entries);
 }
+
+/* ------------------------------------------------------------------ *
+ * Cell fills
+ * ------------------------------------------------------------------ */
+
+/**
+ * Painting a cell without rebuilding the workbook.
+ *
+ * A fill is not a property of the cell. The cell carries `s="42"`, an index
+ * into `cellXfs` in styles.xml, and that record points at a fill, a font, a
+ * border and a number format all at once. So colouring one cell means finding
+ * a cellXf exactly like the one it already uses but with a different fill,
+ * and creating it if no such record exists — otherwise the cell would lose
+ * its borders and its date format to gain a colour.
+ *
+ * Every new record is appended. Nothing existing is rewritten, so every other
+ * cell in the workbook keeps pointing at exactly the style it pointed at
+ * before, which is the same reason the rest of this file edits in place.
+ */
+export class StyleTable {
+  private xml: string;
+  private fills: string[];
+  private xfs: string[];
+  /** oldXf + fill -> the xf that is the two of them together. */
+  private combined = new Map<string, number>();
+  private dirty = false;
+
+  constructor(stylesXml: string) {
+    this.xml = stylesXml;
+    this.fills = StyleTable.list(stylesXml, "fills", /<fill>[\s\S]*?<\/fill>|<fill\/>/g);
+    this.xfs = StyleTable.cellXfs(stylesXml);
+  }
+
+  private static list(xml: string, tag: string, item: RegExp): string[] {
+    const block = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>`).exec(xml);
+    return block ? (block[0].match(item) ?? []) : [];
+  }
+
+  private static cellXfs(xml: string): string[] {
+    const block = /<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/.exec(xml);
+    return block ? (block[0].match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g) ?? []) : [];
+  }
+
+  /** The index of a solid fill of this colour, adding one if need be. */
+  private fillFor(argb: string): number {
+    const rgb = `FF${argb.toUpperCase()}`;
+    const found = this.fills.findIndex(
+      (f) => new RegExp(`patternType="solid"`).test(f) && new RegExp(`rgb="${rgb}"`, "i").test(f),
+    );
+    if (found >= 0) return found;
+
+    this.fills.push(
+      `<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`,
+    );
+    this.dirty = true;
+    return this.fills.length - 1;
+  }
+
+  /**
+   * The style index for "whatever `from` was, filled with this colour".
+   *
+   * `from` is the cell's current `s` attribute, or 0 when it has none.
+   */
+  styleFor(from: number, argb: string): number {
+    const key = `${from}:${argb.toUpperCase()}`;
+    const hit = this.combined.get(key);
+    if (hit !== undefined) return hit;
+
+    const fill = this.fillFor(argb);
+    const base = this.xfs[from] ?? this.xfs[0] ?? "<xf/>";
+
+    // Same record, new fill. applyFill has to be set or Excel keeps showing
+    // the fill the xf inherits from its cellStyleXf instead of this one.
+    let next = base.replace(/\sfillId="\d+"/, "").replace(/\sapplyFill="[^"]*"/, "");
+    next = next.replace(/^<xf\b/, `<xf fillId="${fill}" applyFill="1"`);
+
+    const existing = this.xfs.indexOf(next);
+    if (existing >= 0) {
+      this.combined.set(key, existing);
+      return existing;
+    }
+
+    this.xfs.push(next);
+    this.dirty = true;
+    const index = this.xfs.length - 1;
+    this.combined.set(key, index);
+    return index;
+  }
+
+  /** styles.xml with whatever was added, or unchanged if nothing was. */
+  toXml(): string {
+    if (!this.dirty) return this.xml;
+    let out = this.xml;
+    out = out.replace(
+      /<fills\b[^>]*>[\s\S]*?<\/fills>/,
+      `<fills count="${this.fills.length}">${this.fills.join("")}</fills>`,
+    );
+    out = out.replace(
+      /<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/,
+      `<cellXfs count="${this.xfs.length}">${this.xfs.join("")}</cellXfs>`,
+    );
+    return out;
+  }
+}
+
+/**
+ * Give one cell a background colour, keeping everything else about it.
+ *
+ * A cell that is not in the sheet yet is created empty, because a colour on a
+ * blank day of the grid is the point: an untaught Friday is still a Friday.
+ */
+export function fillCell(xml: string, ref: string, argb: string, styles: StyleTable): string {
+  const pos = splitRef(ref);
+  if (!pos) return xml;
+
+  const existing = new RegExp(`<c r="${ref}"((?:\\s[^>]*?)?)(?:/>|>([\\s\\S]*?)</c>)`).exec(xml);
+  if (existing) {
+    const from = Number(/\ss="(\d+)"/.exec(existing[1])?.[1] ?? 0);
+    const attrs = existing[1].replace(/\ss="\d+"/, "");
+    const style = styles.styleFor(from, argb);
+    const body = existing[2];
+    const rebuilt =
+      body === undefined
+        ? `<c r="${ref}" s="${style}"${attrs}/>`
+        : `<c r="${ref}" s="${style}"${attrs}>${body}</c>`;
+    return xml.slice(0, existing.index) + rebuilt + xml.slice(existing.index + existing[0].length);
+  }
+
+  // Nothing there: put an empty cell in so it can carry the colour. setCell
+  // already knows how to splice a cell into the right place in the right row,
+  // and a space is the smallest value it will write.
+  const seeded = setCell(xml, ref, " ");
+  if (!seeded.applied) return xml;
+  return fillCell(seeded.xml, ref, argb, styles);
+}
+
+/** The Friday, Saturday and course-day colours, from the form's own legend. */
+export const DAY_FILL = {
+  friday: "FFFF00",
+  saturday: "A9D18E",
+  course: "DEEBF7",
+} as const;

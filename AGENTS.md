@@ -48,6 +48,37 @@ day among the five, and a first-aid line that does not name it is a half day
 (`narrowFirstAid`). It is not an inference from the data — do not "fix" it
 back to reporting the ambiguity.
 
+The form is NE-HR050 2026 and the app ships it, with the letter, in
+`public/templates/` (`templates.ts` fetches them; `standalone/build.mjs`
+copies them beside `app.js`). Nothing is uploaded to draft a sheet any more.
+The 2025 sheets still parse — section headings and rate-line wording are
+matched, not row numbers — and both forms are checked by the scripts before
+any parsing rule changes.
+
+Three rules about days are the office's, not inferences: a Friday or Saturday
+claimed with no course behind it is standby at half the weekend rate (near
+band only; the distance bands have their own standby line); two half-day
+classes on a weekday go on the morning and afternoon lines rather than the
+full-day line, which is worth the same; and a multi-day course is one log
+line per day at Full Day, because the Duration column is a dropdown of
+Half Day / Full Day / Outbound and "4 Days" is not one of them.
+
+Freelancers are priced by `freelanceTotal`, which **replaces** the staff rate
+arithmetic rather than adjusting it — the finding carries no delta, and
+`verifiedTotal` and `payableTotal` return it directly. Adding a delta on top
+of the other corrections double-counts, which is exactly the bug that shipped
+in the first draft of it.
+
+Cell fills go through `StyleTable` (`xlsxEdit.ts`), which appends a cellXf
+combining the cell's existing formatting with the new fill. Never rewrite an
+existing xf: every other cell in the workbook indexes into that table. The
+Friday/Saturday colours are lifted from the template's legend at H7/H8 of the
+verification tab, so check there rather than inventing a hex.
+
+Labels can be merged. `labelledField` skips past the label's own merged range
+and resolves the answer to its merge anchor, because writing into the second
+column of a merged label is writing into a cell Excel never draws.
+
 The month's letter (`summaryDoc.ts`) is written the same way: the office's own
 `.docx` with its table rows replaced, one part of the zip changed. Its first
 data row is the prototype every row is cloned from and its last row is the

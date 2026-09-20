@@ -96,7 +96,14 @@ export interface DayEvidence {
   sites: string[];
 }
 
-export type ClaimSection = "near" | "mid" | "far" | "perdiem" | "admin";
+export type ClaimSection =
+  | "near"
+  | "mid"
+  | "far"
+  | "perdiem"
+  | "admin"
+  | "officeboy"
+  | "special";
 
 /**
  * What a training site is, for the rate band.
@@ -171,6 +178,14 @@ export type ClaimKind =
   | "friday"
   | "perdiem"
   | "admin"
+  /**
+   * A special-project line — Maharat or Qiddiya, paid by the week.
+   *
+   * NE-HR050 added these in 2026. They are not day claims and the record
+   * sheet has nothing to check them against, so they are carried and shown
+   * but never valued as teaching days.
+   */
+  | "special"
   | "unknown";
 
 /** One rate line of the claim grid — a row of the trainer's time sheet. */
@@ -314,6 +329,12 @@ export interface SheetReport {
   computedTotal: number;
   /** computedTotal after every priced correction. */
   verifiedTotal: number;
+  /**
+   * What the month comes to at the freelance teaching allowance, or null for
+   * staff. When set it is the figure that is paid, and the form's own rate
+   * table does not apply.
+   */
+  freelanceTotal: number | null;
   /** Errors whose money impact needs a human — a distance to confirm, say. */
   unpricedCount: number;
   errorCount: number;
@@ -335,6 +356,37 @@ export interface DayReport {
   covers: TimecardCover[];
   /** The band the evidence puts this day in, null while a site is unpriced. */
   expectedBand: ClaimSection | null;
+  /**
+   * True when this is a Friday or Saturday the trainer claimed with no course
+   * behind it — read as a standby day at half the weekend rate, and written
+   * into the verification log as Standby.
+   */
+  standby?: boolean;
+  /** Teaching days this date actually pays for, after the rules have run. */
+  payableDays?: number;
   sites: string[];
   findingIds: string[];
 }
+
+/**
+ * How a trainer is engaged, which decides what a day of theirs is worth.
+ *
+ * Staff are paid from the rate table printed on the form. Freelancers are not
+ * on that table at all: their teaching allowance is a flat rate a day, half of
+ * it for a half day, wherever the course ran. The office holds this per
+ * person, so it is kept beside the distances and the timecards rather than
+ * read off any sheet.
+ */
+export interface TrainerTerms {
+  /** The instructor as the record sheet names them. */
+  name: string;
+  freelance: boolean;
+}
+
+/** The freelance teaching allowance, in the same currency as the sheets. */
+export interface FreelanceRates {
+  day: number;
+  half: number;
+}
+
+export const DEFAULT_FREELANCE_RATES: FreelanceRates = { day: 75, half: 37.5 };

@@ -1,4 +1,5 @@
 import { CourseCatalog } from "./courses";
+import { FULL_DAY_LABEL } from "./logLines";
 import { matchInstructor } from "./names";
 import {
   bandForSite,
@@ -36,9 +37,11 @@ import {
   SECTION_LABELS,
   targetKind,
 } from "./timesheet";
+import { DEFAULT_FREELANCE_RATES } from "./types";
 import type {
   CellEdit,
   ClaimKind,
+  FreelanceRates,
   ClaimSection,
   CourseDuration,
   SiteDistance,
@@ -66,6 +69,9 @@ const fmtDays = (n: number) =>
   n === 0 ? "nothing" : n === 0.5 ? "half a day" : n === 1 ? "a full day" : `${n} days`;
 
 const sar = (n: number) => `${Math.round(n).toLocaleString("en-US")} SAR`;
+/** Same, but keeping a half riyal — the freelance half day is 37.5, not 38. */
+const sarExact = (n: number) =>
+  `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} SAR`;
 
 function describeBlock(b: TeachingBlock): string {
   const names = b.courseNames.join(" + ") || "(unnamed course)";
@@ -164,6 +170,9 @@ export interface VerifyOptions {
   sites: SiteTable;
   /** Signed assessor timecards, the evidence for days that issue no papers. */
   timecards: Timecard[];
+  /** Set when this instructor is a freelancer, not on the form's rate table. */
+  freelance: boolean;
+  freelanceRates: FreelanceRates;
 }
 
 export function verifySheet(
@@ -176,6 +185,8 @@ export function verifySheet(
   const month = options?.month ?? record.month;
   const sites = options?.sites ?? new SiteTable([]);
   const timecards = options?.timecards ?? [];
+  const freelance = options?.freelance ?? false;
+  const freelanceRates = options?.freelanceRates ?? DEFAULT_FREELANCE_RATES;
 
   const usedIds = new Map<string, number>();
   /** `fix` defaults to null: a finding is only applicable when it says so. */
@@ -596,7 +607,33 @@ export function verifySheet(
     // A signed timecard buys the whole day, so a covered date is a full day of
     // supported work whatever the record sheet does or does not hold.
     const covered = covers.length > 0;
-    const supportedDays = Math.max(rec?.load ?? 0, covered ? 1 : 0);
+
+    /*
+     * Standby on a Friday or Saturday.
+     *
+     * A trainer called in for a weekend course that then does not run has
+     * still given up the day, and the scheme pays that: half the weekend rate.
+     * It is the one case where a claim with no session behind it is correct
+     * rather than unsupported, so it is settled here, before the rules that
+     * would otherwise read the empty day as an invention.
+     *
+     * Only Friday and Saturday. A weekday with nothing delivered is not
+     * standby, it is a day to ask about.
+     */
+    const nothingRan = !covered && (!rec || (rec.blocks.length === 0 && rec.continuations.length === 0));
+    const weekendDay = weekday === FRIDAY || weekday === SATURDAY;
+    /* Only the NEFT band. The distance bands carry their own
+       "Traveling/Standby Day rate" line, and a trainer who drove 400 km to a
+       course that did not run is owed that, not half a weekend day. */
+    const standby =
+      weekendDay &&
+      nothingRan &&
+      report.claims.some((c) => c.row.dayValue > 0) &&
+      !report.claims.some((c) => c.row.section === "mid" || c.row.section === "far");
+    const standbyKind: ClaimKind = weekday === FRIDAY ? "friHalf" : "satHalf";
+
+    const supportedDays = Math.max(rec?.load ?? 0, covered ? 1 : 0, standby ? 0.5 : 0);
+    if (standby) report.standby = true;
 
     /* Rate line vs the actual day of the week. */
     const wantCategory = categoryOfDate(weekday);
@@ -628,8 +665,97 @@ export function verifySheet(
       });
     }
 
-    /* More than one working day claimed for one date. */
-    if (report.claimedDays > 1.001) {
+    /*
+     * Two half-day classes on a weekday go on the two half-day lines.
+     *
+     * The form has a morning line and an afternoon line precisely so that a
+     * day built out of two classes reads as two classes. Ticking the full-day
+     * line instead pays exactly the same \u2014 50 and 50 against 100 \u2014 so this
+     * costs nobody anything; it is about the sheet saying what happened, and
+     * it is what the verification log is checked against.
+     */
+    const halfBlocks = [...(rec?.blocks ?? []), ...(rec?.continuations ?? [])].filter(
+      (b) => b.dayValue <= 0.5,
+    );
+    const fullTick = nearClaims.find((c) => c.row.kind === "full");
+    if (wantCategory === "weekday" && halfBlocks.length >= 2 && fullTick) {
+      const amCell = claimCell(sheet, "near", "halfAM", date.getDate());
+      const pmCell = claimCell(sheet, "near", "halfPM", date.getDate());
+      const courses = halfBlocks.map((b) => b.courseNames.join(" + "));
+      addDayFinding(report, {
+        severity: "warning",
+        code: "half-pair",
+        title: "Two half days claimed as one full day",
+        why:
+          `${fmtDate(date)} is two half-day classes \u2014 ${courses.join(" and ")} \u2014 but the sheet ticks "${KIND_LABELS.full}". ` +
+          `The form has a morning line and an afternoon line for exactly this, and the pair is worth the same as the full day, so the figure does not change. ` +
+          `Tick "${KIND_LABELS.halfAM}" and "${KIND_LABELS.halfPM}" instead, so the sheet and the verification log both show the two classes.`,
+        suggestion: `Tick the morning and afternoon lines instead of the full day.`,
+        fix:
+          amCell && pmCell
+            ? [
+                ...clearEdits([fullTick.cell]),
+                {
+                  sheet: "timesheet" as const,
+                  cell: amCell,
+                  value: 1,
+                  describe: `Tick ${amCell} \u2014 ${KIND_LABELS.halfAM}`,
+                },
+                {
+                  sheet: "timesheet" as const,
+                  cell: pmCell,
+                  value: 1,
+                  describe: `Tick ${pmCell} \u2014 ${KIND_LABELS.halfPM}`,
+                },
+              ]
+            : null,
+        sheet: "timesheet",
+        cells: [fullTick.cell],
+        date,
+        claimedSar: fullTick.row.rate,
+        suggestedSar: fullTick.row.rate,
+        delta: 0,
+        evidence,
+      });
+    }
+
+    /*
+     * Standby and teaching on the same day.
+     *
+     * NE-HR050 says it in as many words: "An employee cannot combine
+     * Travelling/Standby Day Rate with teaching rate for the same day. Must be
+     * either one."
+     */
+    const teachingNotTravel = teachingClaims.filter((c) => c.row.kind !== "travel");
+    const travelAndTeaching = travelClaims.length > 0 && teachingNotTravel.length > 0;
+    if (travelAndTeaching) {
+      const travelSar = travelClaims.reduce((sum, c) => sum + c.row.rate, 0);
+      const teachSar = teachingNotTravel.reduce((sum, c) => sum + c.row.rate, 0);
+      // The day was taught, so teaching is the line that stands and the
+      // travelling day is the one that comes off.
+      addDayFinding(report, {
+        severity: "error",
+        code: "travel-and-teaching",
+        title: "Travelling day and teaching claimed for the same date",
+        why:
+          `${fmtDate(date)} carries both ${travelClaims.map((c) => `${KIND_LABELS[c.row.kind]} ${c.cell}`).join(", ")} and ${teachingNotTravel.map((c) => `${KIND_LABELS[c.row.kind]} ${c.cell}`).join(", ")}. ` +
+          `The form's own standards say an employee cannot combine the Travelling/Standby day rate with a teaching rate for the same day \u2014 it must be one or the other. ` +
+          `The record sheet shows teaching on this date, so the travelling day comes off.`,
+        suggestion: "Drop the travelling/standby tick and keep the teaching line.",
+        fix: clearEdits(travelClaims.map((c) => c.cell)),
+        sheet: "timesheet",
+        cells: [...travelClaims, ...teachingNotTravel].map((c) => c.cell),
+        date,
+        claimedSar: travelSar + teachSar,
+        suggestedSar: teachSar,
+        delta: -travelSar,
+        evidence,
+      });
+    }
+
+    /* More than one working day claimed for one date, where that is not
+       already the travelling-plus-teaching pair reported just above. */
+    if (report.claimedDays > 1.001 && !travelAndTeaching) {
       addDayFinding(report, {
         severity: "error",
         code: "over-day",
@@ -729,8 +855,9 @@ export function verifySheet(
       });
     }
 
-    /* Nothing at all behind a claimed day. */
-    if (!covered && (!rec || rec.load === 0)) {
+    /* Nothing at all behind a claimed day — unless it is weekend standby,
+       which the rule above has already settled and priced. */
+    if (!covered && !standby && (!rec || rec.load === 0)) {
       const onlyTravel = teachingClaims.length > 0 && teachingClaims.every((c) => c.row.kind === "travel");
       const severity: Severity = onlyTravel ? "warning" : "error";
       const cells = teachingClaims.map((c) => c.cell);
@@ -762,6 +889,50 @@ export function verifySheet(
      * claimed in the wrong band gets the band correction and nothing else —
      * two notes pointing opposite ways help nobody.
      */
+    /*
+     * Say out loud that the day is being read as standby, and put it on the
+     * weekend half-day line if it is not there already.
+     */
+    if (standby) {
+      const onRightLine = nearClaims.every((c) => c.row.kind === standbyKind);
+      const halfRate = rateFor(sheet, standbyKind);
+      // Teaching lines only: a hotel or food per diem on the same date is a
+      // separate allowance and is not what standby replaces.
+      const claimedSar = teachingClaims.reduce((sum, c) => sum + c.row.rate, 0);
+      const dayName = date.toLocaleDateString("en-GB", { weekday: "long" });
+      addDayFinding(report, {
+        severity: onRightLine ? "info" : "error",
+        code: "standby",
+        title: onRightLine
+          ? `${dayName} standby \u2014 no course ran`
+          : `${dayName} standby is paid at half the day`,
+        why:
+          `The record sheet has no session for ${fmtDate(date)} and no timecard covers it, but the sheet claims the day. ` +
+          `On a ${dayName} that is standby: the trainer was called in for a course that did not run, which the scheme pays at "${KIND_LABELS[standbyKind]}"` +
+          (halfRate !== null ? `, ${sar(halfRate)}.` : ".") +
+          (onRightLine
+            ? " That is what is claimed here, so nothing changes \u2014 the verification log should name the line Standby so it is not read as a missing course."
+            : ` The day is claimed as ${teachingClaims.map((c) => KIND_LABELS[c.row.kind]).join(", ")} instead; a standby day is never a full day.`),
+        suggestion: onRightLine ? null : `Move to "${KIND_LABELS[standbyKind]}".`,
+        fix: onRightLine
+          ? undefined
+          : retickEdits(
+              teachingClaims.map((c) => c.cell),
+              "near",
+              weekday,
+              0.5,
+              date.getDate(),
+            ),
+        sheet: "timesheet",
+        cells: teachingClaims.map((c) => c.cell),
+        date,
+        claimedSar,
+        suggestedSar: halfRate,
+        delta: halfRate === null ? null : halfRate - claimedSar,
+        evidence,
+      });
+    }
+
     const claimedBand = teachingClaims.length
       ? (teachingClaims[0].row.section as ClaimSection)
       : null;
@@ -798,6 +969,9 @@ export function verifySheet(
         delta: null,
         evidence,
       });
+    } else if (standby) {
+      /* Priced at half the weekend rate by the standby finding above; an
+         over-claim note on top would subtract the same riyals twice. */
     } else if (claimedTeaching > supportedDays + 0.001 && travelClaims.length === 0) {
       const blocks = rec?.blocks ?? [];
       const suggested = suggestedSarFor(sheet, weekday, supportedDays);
@@ -934,6 +1108,20 @@ export function verifySheet(
         evidence,
       });
     }
+
+    /*
+     * What this date actually pays for, once every rule above has had its
+     * say. The distance bands have no half-day line, so a band day pays a
+     * whole day; standby pays half; everything else pays the smaller of what
+     * was claimed and what the evidence supports. Only the freelance rates
+     * read this, and they need it per day rather than per riyal, because a
+     * freelancer's day is worth the same wherever it was taught.
+     */
+    report.payableDays = standby
+      ? 0.5
+      : bandOnly
+        ? Math.min(1, claimedTeaching)
+        : Math.min(claimedTeaching, supportedDays);
 
     /* The record itself says more than a day happened. */
     if (rec && rec.rawLoad > 1.001) {
@@ -1270,6 +1458,41 @@ export function verifySheet(
             evidence: course ? [`Course list: ${course.name} — ${course.label}`] : [],
           }),
         );
+      } else if (entry.durationDays > 1.001) {
+        /*
+         * A multi-day course written as one line.
+         *
+         * "4 Days" in the Duration cell describes the course, not the day the
+         * line is dated. The grid has a tick on each of the four dates, so a
+         * log with one line cannot be read against it, and NE-HR050's own
+         * Duration dropdown offers only Half Day, Full Day and Outbound \u2014
+         * there is no cell to write "4 Days" into any more.
+         */
+        const span = Math.round(entry.durationDays);
+        findings.push(
+          makeFinding({
+            severity: "warning",
+            code: "multi-day",
+            title: `"${entry.courseName}" runs ${span} days and is on one line`,
+            why: `Row ${entry.rowIndex} gives the duration as "${entry.durationLabel}". That is how long the course runs, not how long the day was \u2014 every one of the ${span} days is a working day with its own tick in the claim grid. Give each day its own line, dated, each one a Full Day.`,
+            suggestion: `Write ${span} lines, one per day, each "${FULL_DAY_LABEL}".`,
+            fix: [
+              {
+                sheet: "verification",
+                cell: `E${entry.rowIndex}`,
+                value: FULL_DAY_LABEL,
+                describe: `Set E${entry.rowIndex} to "${FULL_DAY_LABEL}"`,
+              },
+            ],
+            sheet: "verification",
+            cells: [`B${entry.rowIndex}`, `E${entry.rowIndex}`],
+            date: entry.date,
+            claimedSar: null,
+            suggestedSar: null,
+            delta: null,
+            evidence: course ? [`Course list: ${course.name} \u2014 ${course.label}`] : [],
+          }),
+        );
       } else if (course && Math.abs(Math.min(course.days, 1) - Math.min(entry.durationDays, 1)) > 0.001) {
         const over = entry.durationDays > course.days;
         findings.push(
@@ -1474,6 +1697,56 @@ export function verifySheet(
     report?.findingIds.push(f.id);
   }
 
+  /*
+   * Freelancers are not on the form's rate table.
+   *
+   * The printed rates \u2014 50 for a morning, 100 for a day at the centre, 250
+   * for a rig \u2014 are staff rates. A freelancer's teaching allowance is a flat
+   * rate a day and half of it for a half day, wherever the course ran, so the
+   * whole month is re-priced from the days that survived verification rather
+   * than from the lines they were ticked on.
+   *
+   * It is one finding rather than a silent substitution, because the figure it
+   * produces will not match the sheet's own total and the verifier is owed the
+   * arithmetic.
+   */
+  let freelanceTotal: number | null = null;
+  if (freelance) {
+    const payableDays = [...dayReports.values()].reduce((sum, d) => sum + (d.payableDays ?? 0), 0);
+    const full = [...dayReports.values()].filter((d) => (d.payableDays ?? 0) >= 0.999).length;
+    const halves = [...dayReports.values()].filter(
+      (d) => (d.payableDays ?? 0) > 0 && (d.payableDays ?? 0) < 0.999,
+    ).length;
+    const owed = full * freelanceRates.day + halves * freelanceRates.half;
+    freelanceTotal = owed;
+    findings.push(
+      makeFinding({
+        // Not an error and not a correction: it is how this person is paid.
+        // It replaces the staff-rate arithmetic rather than adjusting it, so
+        // it carries no delta \u2014 a delta would be subtracted from a total
+        // that no longer applies.
+        severity: "info",
+        code: "freelance",
+        title: `Freelance rates: ${fmtDays(payableDays)} at ${sarExact(freelanceRates.day)} a day`,
+        why:
+          `This instructor is marked as a freelancer, so the rate table printed on the form does not apply to them. ` +
+          `The month comes to ${full} full day${full === 1 ? "" : "s"} at ${sar(freelanceRates.day)}` +
+          (halves ? ` and ${halves} half day${halves === 1 ? "" : "s"} at ${sarExact(freelanceRates.half)}` : "") +
+          `, which is ${sarExact(owed)} against the ${sar(computedTotal)} the ticks add up to at staff rates.`,
+        suggestion: `Pay ${sarExact(owed)} at the freelance teaching allowance.`,
+        sheet: "timesheet",
+        cells: [],
+        date: null,
+        claimedSar: computedTotal,
+        suggestedSar: owed,
+        delta: null,
+        evidence: [
+          `Freelance teaching allowance: ${sarExact(freelanceRates.day)} a day, ${sarExact(freelanceRates.half)} a half day`,
+        ],
+      }),
+    );
+  }
+
   /* ---------------- totals ---------------- */
 
   /*
@@ -1510,7 +1783,11 @@ export function verifySheet(
     days: [...dayReports.values()].sort((a, b) => a.key.localeCompare(b.key)),
     claimedTotal,
     computedTotal,
-    verifiedTotal: Math.max(0, computedTotal + delta),
+    freelanceTotal,
+    // A freelancer's month is priced from their own allowance, so the staff
+    // rate table's arithmetic \u2014 and the corrections to it \u2014 do not decide
+    // what they are owed.
+    verifiedTotal: freelanceTotal ?? Math.max(0, computedTotal + delta),
     unpricedCount,
     errorCount: findings.filter((f) => f.severity === "error").length,
     warningCount: findings.filter((f) => f.severity === "warning").length,

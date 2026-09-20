@@ -1,7 +1,10 @@
+import { highlightGrid, highlightLog } from "./highlight";
+import { logLinesForDay, type LogLine } from "./logLines";
 import { describeTimecard } from "./timecards";
-import { KIND_LABELS } from "./timesheet";
+import { claimCell, KIND_LABELS } from "./timesheet";
 import type { CellEdit, Finding, SheetReport } from "./types";
 import {
+  StyleTable,
   forceRecalc,
   entryText,
   openWorkbook,
@@ -108,6 +111,9 @@ export function previewRows(
  * figure the month's incentive letter should carry.
  */
 export function payableTotal(report: SheetReport, accepted: Set<string>): number {
+  // A freelancer is paid their allowance, not the form's rate lines, so the
+  // corrected workbook's own total is not the figure that goes in the letter.
+  if (report.freelanceTotal !== null) return report.freelanceTotal;
   const plan = buildPlan(report, accepted);
   return previewRows(report, plan).reduce((sum, r) => sum + r.total, 0);
 }
@@ -178,6 +184,7 @@ export async function buildCorrectedWorkbook(
 
   const applied: string[] = [];
   const skipped: string[] = [];
+  const logRows: { row: number; date: Date }[] = [];
 
   const write = (which: "timesheet" | "verification", cell: string, value: CellEdit["value"], note: string) => {
     const current = xml[which];
@@ -210,34 +217,22 @@ export async function buildCorrectedWorkbook(
   /* The verification log, rebuilt from the evidence if asked. */
   if (options.rebuildLog && xml.verification && sheet.verificationLayout) {
     const layout = sheet.verificationLayout;
-    const lines: { date: Date; course: string; location: string; session: string; duration: string }[] = [];
-    for (const day of report.days) {
-      // Continuations belong on the log as much as first days do: a four-day
-      // WellSharp is taught on all four, and a log that only names the day the
-      // certificates were issued reads as three days of nothing.
-      for (const block of [...(day.record?.blocks ?? []), ...(day.record?.continuations ?? [])]) {
-        lines.push({
-          date: day.date,
-          course: block.courseNames.join(" + "),
-          location: block.locations.join(", "),
-          session: block.sessionNos.join(", "),
-          duration: block.duration?.label ?? "",
-        });
-      }
-      for (const cover of day.covers) {
-        lines.push({
-          date: day.date,
-          course: cover.timecard.activity,
-          location: cover.timecard.unit,
-          session: cover.timecard.attachmentName ?? "timecard",
-          duration: "1 Full Day",
-        });
-      }
-    }
+    // Continuations belong on the log as much as first days do: a four-day
+    // WellSharp is taught on all four, and a log that only names the day the
+    // certificates were issued reads as three days of nothing.
+    const lines: LogLine[] = report.days.flatMap((day) =>
+      logLinesForDay({
+        date: day.date,
+        record: day.record,
+        covers: day.covers,
+        standby: day.standby,
+      }),
+    );
     lines.sort((a, b) => a.date.getTime() - b.date.getTime());
 
     let row = layout.headerRow + 1;
     for (const line of lines) {
+      logRows.push({ row, date: line.date });
       write("verification", `${layout.dateColumn}${row}`, fmtLogDate(line.date), `Log row ${row}: ${line.course}`);
       write("verification", `${layout.courseColumn}${row}`, line.course, `Log row ${row} course`);
       write("verification", `${layout.locationColumn}${row}`, line.location, `Log row ${row} location`);
@@ -259,6 +254,42 @@ export async function buildCorrectedWorkbook(
       }
     }
     applied.push(`Rebuilt the verification log — ${lines.length} line${lines.length === 1 ? "" : "s"}.`);
+  }
+
+  /*
+   * Colour the days last, so it paints the sheet as corrected rather than as
+   * submitted \u2014 a tick that moved takes its colour with it.
+   */
+  const stylesXml = entryText(book, "xl/styles.xml");
+  if (stylesXml) {
+    const styles = new StyleTable(stylesXml);
+    const first = report.days[0]?.date ?? null;
+    if (xml.timesheet && first) {
+      const tickedByDay = new Map<number, string[]>();
+      for (const row of previewRows(report, plan)) {
+        const source = sheet.rows.find((r) => r.rowIndex === row.rowIndex);
+        if (!source || source.dayValue <= 0) continue;
+        for (const day of row.days) {
+          const cell = claimCell(sheet, source.section, source.kind, day);
+          if (cell) tickedByDay.set(day, [...(tickedByDay.get(day) ?? []), cell]);
+        }
+      }
+      xml.timesheet = highlightGrid(xml.timesheet, sheet, {
+        tickedByDay,
+        year: first.getFullYear(),
+        month: first.getMonth(),
+      }, styles);
+    }
+    if (xml.verification && sheet.verificationLayout) {
+      const rows = logRows.length
+        ? logRows
+        : sheet.verification
+            .filter((e) => e.date)
+            .map((e) => ({ row: e.rowIndex, date: e.date as Date }));
+      xml.verification = highlightLog(xml.verification, sheet.verificationLayout, rows, styles);
+    }
+    const nextStyles = styles.toXml();
+    if (nextStyles !== stylesXml) setEntryText(book, "xl/styles.xml", nextStyles);
   }
 
   setEntryText(book, timePath, updateDimension(xml.timesheet));

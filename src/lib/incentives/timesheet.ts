@@ -60,13 +60,25 @@ function sheetToGrid(sheet: XLSX.WorkSheet): Grid {
  */
 /** From a string so the en dash survives any bundler and any charset. */
 const AFTERNOON_SLOT = new RegExp("\\b1\\s*(to|-|\\u2013)\\s*5\\b|afternoon|pm\\b");
+/** "Half Day" on the 2025 form, "Half-Day" on NE-HR050. */
+const HALF_DAY = /half[\s-]*day/;
+const FULL_DAY = /full[\s-]*day/;
 
 const SECTION_PATTERNS: [RegExp, ClaimSection][] = [
+  /* The three "Per Diem -" headings differ only by who they are for, so the
+     two narrow ones have to be tried before the word all three share. */
+  /* Anchored: the per-diem heading ends "...outside special project", and an
+     unanchored test would file the whole per-diem block under Special
+     Projects. Both real headings open with the words. */
+  [/^special\s*projects?\b/i, "special"],
+  [/office\s*boy|janitor/i, "officeboy"],
+  [/admins?\s*(and|&|\/)\s*coordinator/i, "admin"],
   [/per\s*diem|trainings?\s+with\s+distance\s+over/i, "perdiem"],
-  [/admins?\s*(and|&)\s*coordinator/i, "admin"],
-  [/more\s*than\s*150\s*k?m|150\s*k?m\s*-\s*350\s*k?m/i, "mid"],
-  [/more\s*than\s*350\s*k?m|rig\s*\/\s*well/i, "far"],
-  [/neft\s*facility|within\s*150\s*km/i, "near"],
+  /* Still before "far": the 2025 mid heading ends "...150 KM-350KM from
+     NEFT", so a far pattern loose enough to catch a bare 350 would take it. */
+  [/more\s*than\s*150\s*k?m|150\s*k?m\s*-\s*350|15[01]\s*k?m\s*(to|\u2013|-)\s*350/i, "mid"],
+  [/more\s*than\s*350\s*k?m|351\s*k?m|remote\s*locations?|rig\s*(or|\/)\s*well/i, "far"],
+  [/neft\s*facility|within\s*150\s*km|training\s*sessions?/i, "near"],
 ];
 
 function sectionOf(label: string): ClaimSection | null {
@@ -84,7 +96,14 @@ function sectionOf(label: string): ClaimSection | null {
 function classify(label: string, section: ClaimSection): { kind: ClaimKind; dayValue: number } {
   const l = label.toLowerCase();
   if (section === "perdiem") return { kind: "perdiem", dayValue: 0 };
-  if (section === "admin") return { kind: "admin", dayValue: 0 };
+  if (section === "admin" || section === "officeboy") return { kind: "admin", dayValue: 0 };
+  if (section === "special") {
+    // The section also carries a sentence of prose about prorating a part
+    // week; only the lines quoting a rate are lines.
+    return /weekly|daily|daliy/.test(l)
+      ? { kind: "special", dayValue: 0 }
+      : { kind: "unknown", dayValue: 0 };
+  }
   if (section === "near") {
     if (/saturday/.test(l)) {
       return /full/.test(l) ? { kind: "satFull", dayValue: 1 } : { kind: "satHalf", dayValue: 0.5 };
@@ -93,11 +112,11 @@ function classify(label: string, section: ClaimSection): { kind: ClaimKind; dayV
       return /full/.test(l) ? { kind: "friFull", dayValue: 1 } : { kind: "friHalf", dayValue: 0.5 };
     }
     if (/other\s*holiday/.test(l)) return { kind: "holiday", dayValue: 1 };
-    if (/half\s*day/.test(l)) {
+    if (HALF_DAY.test(l)) {
       const pm = AFTERNOON_SLOT.test(l);
       return { kind: pm ? "halfPM" : "halfAM", dayValue: 0.5 };
     }
-    if (/full\s*day/.test(l)) return { kind: "full", dayValue: 1 };
+    if (FULL_DAY.test(l)) return { kind: "full", dayValue: 1 };
     return { kind: "unknown", dayValue: 0 };
   }
   // mid / far bands
@@ -113,6 +132,8 @@ export const SECTION_LABELS: Record<ClaimSection, string> = {
   far: "Over 350 km, rig or well",
   perdiem: "Per diem",
   admin: "Admins and coordinators",
+  officeboy: "Office boy / maintenance / janitor",
+  special: "Special projects",
 };
 
 export const KIND_LABELS: Record<ClaimKind, string> = {
@@ -129,6 +150,7 @@ export const KIND_LABELS: Record<ClaimKind, string> = {
   friday: "Friday",
   perdiem: "Per diem",
   admin: "Admin / coordinator",
+  special: "Special project, weekly",
   unknown: "Unrecognised line",
 };
 
@@ -364,6 +386,30 @@ function parseVerification(
  * Header fields
  * ------------------------------------------------------------------ */
 
+/** A merged range, as the sheet declares it. */
+export interface Merge {
+  s: { r: number; c: number };
+  e: { r: number; c: number };
+}
+
+/** The merged range covering a cell, if any. */
+function mergeAt(merges: Merge[], row: number, col: number): Merge | null {
+  return (
+    merges.find((m) => row >= m.s.r && row <= m.e.r && col >= m.s.c && col <= m.e.c) ?? null
+  );
+}
+
+/**
+ * The address a value written at this position will actually show at.
+ *
+ * Only the top-left cell of a merged range holds anything; the rest are
+ * painted over by it.
+ */
+function anchor(merges: Merge[], row: number, col: number): string {
+  const m = mergeAt(merges, row, col);
+  return m ? addr(m.s.r, m.s.c) : addr(row, col);
+}
+
 /**
  * Find a labelled field: "Instructor Name:" and the cell holding the answer.
  *
@@ -375,16 +421,27 @@ function labelledField(
   grid: Grid,
   upto: number,
   pattern: RegExp,
+  merges: Merge[] = [],
 ): { value: string; cell: string | null } {
   for (let row = 0; row < Math.min(grid.length, upto); row += 1) {
     const width = grid[row]?.length ?? 0;
     for (let c = 0; c < width; c += 1) {
       if (!pattern.test(text(grid, row, c))) continue;
+      /*
+       * Start after the label's own merge.
+       *
+       * NE-HR050 merges "Month :" across three columns and puts the answer in
+       * the merge after it. Writing into the second column of the label's own
+       * range is writing into a cell Excel never draws — the name would go in
+       * and the sheet would come out blank.
+       */
+      const own = mergeAt(merges, row, c);
+      const from = own ? own.e.c + 1 : c + 1;
       // Bounded, because the signature row carries "Verifier By:" and
       // "Approved by:" side by side — scanning the whole row for the first
       // filled cell would hand back the next label as this one's answer.
-      const limit = Math.min(width, c + 11);
-      for (let k = c + 1; k < limit; k += 1) {
+      const limit = Math.min(width, from + 10);
+      for (let k = from; k < limit; k += 1) {
         const v = cellAt(grid, row, k);
         if (v === null || v === "") continue;
         if (/:$/.test(text(grid, row, k))) break;
@@ -396,11 +453,11 @@ function labelledField(
         const value = asDate
           ? asDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
           : cellToString(v).replace(/\s+/g, " ").trim();
-        return { value, cell: addr(row, k) };
+        return { value, cell: anchor(merges, row, k) };
       }
       // A label with nothing beside it still tells us where the answer goes:
-      // the next cell along, which a blank template leaves empty.
-      return { value: "", cell: addr(row, c + 1) };
+      // the first cell past it, which a blank template leaves empty.
+      return { value: "", cell: anchor(merges, row, from) };
     }
   }
   return { value: "", cell: null };
@@ -420,6 +477,8 @@ export function parseIncentiveSheet(
   let layout: GridLayout | null = null;
   let grid: Grid | null = null;
   let timeSheetName = "";
+  /** The grid tab's merged ranges, so a label's answer lands where it shows. */
+  let merges: Merge[] = [];
   let verification: VerificationEntry[] | null = null;
   let verificationLayout: VerificationLayout | null = null;
   let verificationSheetName: string | null = null;
@@ -440,6 +499,7 @@ export function parseIncentiveSheet(
           layout = found;
           grid = g;
           timeSheetName = name;
+          merges = (sheet["!merges"] ?? []) as Merge[];
         }
       }
     }
@@ -463,14 +523,14 @@ export function parseIncentiveSheet(
   const statedGrandTotal =
     grandTotalRow >= 0 ? cellToNumber(cellAt(grid, grandTotalRow, layout.totalCol)) : null;
 
-  const instructor = labelledField(grid, layout.headerRow, /instructor\s*'?s?\s*name/i);
-  const month = labelledField(grid, layout.headerRow, /^month\b/i);
+  const instructor = labelledField(grid, layout.headerRow, /instructor\s*'?s?\s*name/i, merges);
+  const month = labelledField(grid, layout.headerRow, /^month\b/i, merges);
   const instructorName = instructor.value;
   const monthLabel = month.value;
   // The signature blocks sit below the grid; a generated sheet must not carry
   // the initials of whoever verified the workbook it was copied from.
-  const verifier = labelledField(grid, grid.length, /^verifier\s*(by)?\s*:?$/i);
-  const approver = labelledField(grid, grid.length, /^approved\s*by\s*:?$/i);
+  const verifier = labelledField(grid, grid.length, /^verifier\s*(by)?\s*:?$/i, merges);
+  const approver = labelledField(grid, grid.length, /^approved\s*by\s*:?$/i, merges);
   if (!instructorName) parseWarnings.push("No instructor name is written on the time sheet.");
   if (!verification) parseWarnings.push("This workbook has no verification log tab.");
 

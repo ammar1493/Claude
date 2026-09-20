@@ -1,4 +1,6 @@
 import { CourseCatalog } from "./courses";
+import { highlightGrid, highlightLog } from "./highlight";
+import { logLinesForDay, type LogLine } from "./logLines";
 import { nameSimilarity } from "./names";
 import { addDays, buildRecordDays, dayKey, type ParsedRecordSheet } from "./record";
 import { resolveBand, SiteTable, type NamedSite } from "./sites";
@@ -12,6 +14,7 @@ import type {
   TimecardCover,
 } from "./types";
 import {
+  StyleTable,
   entryText,
   forceRecalc,
   openWorkbook,
@@ -263,7 +266,9 @@ export async function buildGeneratedWorkbook(
   const perRow = new Map<number, number>();
   let ticked = 0;
   let tickedValue = 0;
-  const logLines: { date: Date; course: string; location: string; session: string; duration: string }[] = [];
+  const logLines: LogLine[] = [];
+  const tickedByDay = new Map<number, string[]>();
+  const logRows: { row: number; date: Date }[] = [];
 
   for (const date of dates) {
     const key = dayKey(date);
@@ -288,29 +293,13 @@ export async function buildGeneratedWorkbook(
       continue;
     }
     put("grid", cell, 1);
+    tickedByDay.set(date.getDate(), [...(tickedByDay.get(date.getDate()) ?? []), cell]);
     ticked += 1;
     tickedValue += load;
     const row = template.rows.find((r) => r.section === band && r.kind === kind);
     if (row) perRow.set(row.rowIndex, (perRow.get(row.rowIndex) ?? 0) + 1);
 
-    for (const block of [...(rec?.blocks ?? []), ...(rec?.continuations ?? [])]) {
-      logLines.push({
-        date,
-        course: block.courseNames.join(" + "),
-        location: block.locations.join(", "),
-        session: block.sessionNos.join(", "),
-        duration: block.duration?.label ?? "",
-      });
-    }
-    for (const cover of covers) {
-      logLines.push({
-        date,
-        course: cover.timecard.activity,
-        location: cover.timecard.unit,
-        session: cover.timecard.attachmentName ?? "timecard",
-        duration: "1 Full Day",
-      });
-    }
+    logLines.push(...logLinesForDay({ date, record: rec, covers }));
   }
 
   /* Totals, from the ticks just written. */
@@ -328,6 +317,7 @@ export async function buildGeneratedWorkbook(
     const layout = template.verificationLayout;
     let row = layout.headerRow + 1;
     for (const line of logLines) {
+      logRows.push({ row, date: line.date });
       put("log", `${layout.dateColumn}${row}`, isoDate(line.date));
       put("log", `${layout.courseColumn}${row}`, line.course);
       put("log", `${layout.locationColumn}${row}`, line.location);
@@ -348,6 +338,24 @@ export async function buildGeneratedWorkbook(
     }
   } else {
     notes.push("The template has no verification log tab, so the draft carries none.");
+  }
+
+  /* Friday yellow, Saturday green, taught weekdays blue \u2014 the same colours
+     the corrected sheets get, from the template's own legend. */
+  const stylesXml = entryText(book, "xl/styles.xml");
+  if (stylesXml && dates.length) {
+    const styles = new StyleTable(stylesXml);
+    const first = dates[0];
+    grid = highlightGrid(grid, template, {
+      tickedByDay,
+      year: first.getFullYear(),
+      month: first.getMonth(),
+    }, styles);
+    if (log && template.verificationLayout) {
+      log = highlightLog(log, template.verificationLayout, logRows, styles);
+    }
+    const nextStyles = styles.toXml();
+    if (nextStyles !== stylesXml) setEntryText(book, "xl/styles.xml", nextStyles);
   }
 
   setEntryText(book, timePath, updateDimension(grid));
