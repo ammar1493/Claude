@@ -26,6 +26,7 @@ writeFileSync(
 import { toISODate } from "@/lib/dates";
 import { autoAssign, buildClasses, findConflicts } from "@/lib/bookings/schedule";
 import { parseClock, parseBookingDate } from "@/lib/bookings/parse";
+import { knownLength } from "@/lib/bookings/courses";
 import type { Booking, Instructor, Leave } from "@/lib/bookings/types";
 
 let seq = 0;
@@ -96,6 +97,35 @@ is("cancelled and delivered classes are out of the plan",
 is("a missing PO is a warning",
   codes([bk({ instructorId: "i1", poStatus: "not-received", poNumber: "" })], [ins({})]),
   ["warning:po-missing"]);
+
+// The office's WellSharp lengths: OGO, Supervisor and Driller run five days,
+// Coiled Tubing, Wireline and Workover three, and a retake is the exam alone.
+// They are matched on the whole name because the catalogue is full of near
+// misses that are different courses entirely.
+is("driller level is five days", knownLength("DRILLER LEVEL 3")?.days, 5);
+is("supervisory level is five days", knownLength("DRILLING SUPERVISORY LEVEL 4")?.days, 5);
+is("a LEEVEL typo still resolves", knownLength("DRILLING SUPERVISORY LEEVEL 4")?.days, 5);
+is("stuck pipe bolted on is still the supervisory course",
+  knownLength("DRILLING SUPERVISORY LEVEL 4 + STUCK PIPE")?.days, 5);
+is("OGO is five days", knownLength("OGO")?.days, 5);
+is("completion OGO is the same course", knownLength("COMPLETION (OGO)")?.days, 5);
+is("coiled tubing is three days", knownLength("COILED TUBING")?.days, 3);
+is("wireline is three days", knownLength("WIRELINES")?.days, 3);
+is("workover is three days", knownLength("WORKOVER")?.days, 3);
+is("a retake is the exam alone", knownLength("DRILLER LEVEL 3 (Retake Exam)")?.days, 1);
+is("so is a retest", knownLength("DRILLER LEVEL 3 (retest)")?.days, 1);
+is("a scaffolding supervisor is not a supervisory level",
+  knownLength("SCAFFOLDING SUPERVISOR"), null);
+is("a wireline applications course is not the WellSharp one",
+  knownLength("SLICK LINE/WIRELINE APPLICATIONS"), null);
+is("an advanced workover workshop is not the WellSharp one",
+  knownLength("ADVANCED WORKOVER OPERATIONS WORKSHOP"), null);
+is("a class booked short of its accreditation is flagged",
+  codes([bk({ courseName: "DRILLER LEVEL 3", instructorId: "i1", endDate: "2026-10-07" })], [ins({})]),
+  ["warning:course-length"]);
+is("a class booked to its accreditation is not",
+  codes([bk({ courseName: "DRILLER LEVEL 3", instructorId: "i1", endDate: "2026-10-09" })], [ins({})]),
+  []);
 
 // The sheet's own spellings. The letter O for a zero and a half-typed meridiem
 // are what trainers actually type, and both have to read as a real time.

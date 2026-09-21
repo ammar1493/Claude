@@ -158,6 +158,16 @@ schedule. Auto-assign never books over leave, never over a clash, and never
 moves an assignment somebody already made; a class it cannot fill is left open
 with the reason rather than filled badly.
 
+Six WellSharp courses have an accredited length — OGO, Drilling Supervisor and
+Drilling Driller run five days, Coiled Tubing, Wireline and Workover three, and
+a retake is the exam alone at one (`bookings/courses.ts`). That is the office's
+figure and beats the sheet's hand-typed `Course Duration` cell. Match the whole
+course name, never a keyword: "SLICK LINE/WIRELINE APPLICATIONS" and "ADVANCED
+WORKOVER OPERATIONS WORKSHOP" are different courses and must not pick up a
+length. `WELLSHARP_HOURS` in `lib/config.ts` says a day less for all six and
+feeds the dashboard's reported hours; it is deliberately left alone, so do not
+"reconcile" the two without asking.
+
 The rules are asserted in `scripts/check-schedule.mjs` (`npm run
 check:schedule`) — change a rule, change a case, and say why in the case. The
 parsing is matched on wording, not on column position: the sheet has two

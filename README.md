@@ -331,6 +331,48 @@ the stated duration counts the days out from the start, and the row is reported
 on the import screen so someone fixes the sheet. Thirteen rows in the September
 2026 file need that.
 
+### Course lengths
+
+Six courses have a length that is a fact of the course rather than of the
+booking, because IADC accredits them at it:
+
+| Course | Days |
+| --- | --- |
+| WellSharp Well Servicing OGO | 5 |
+| WellSharp Drilling Supervisory Level | 5 |
+| WellSharp Drilling Driller Level | 5 |
+| WellSharp Well Servicing Coiled Tubing | 3 |
+| WellSharp Well Servicing Wireline | 3 |
+| WellSharp Well Servicing Workover | 3 |
+
+A retake sits outside the table: it is the exam alone, one day, which is how
+the booking sheet already writes it.
+
+They are the office's figures (`src/lib/bookings/courses.ts`), and the booking
+sheet's own `Course Duration` column agrees with all six wherever it is filled
+in. They do three things: pick the length when a booking's date range is
+unusable, so a broken row is rebuilt from the accreditation rather than from a
+hand-typed cell; fill in the last day when one of the six is chosen in the
+new-booking form; and flag a class booked over the wrong number of days in the
+plan check. That last one is a warning, not an error — the office books
+exam-only sittings and the occasional extended class on purpose. Seven of the
+164 WellSharp classes in the September 2026 sheet disagree with the table.
+
+Names are matched whole, not by keyword, because the catalogue is full of near
+misses that are different courses: `SLICK LINE/WIRELINE APPLICATIONS` (NEFT
+T13) is not the WellSharp wireline course, `ADVANCED WORKOVER OPERATIONS
+WORKSHOP` (NEFT T07) is not the workover one, and `SCAFFOLDING SUPERVISOR` is
+not a supervisory level. The office's own drift is repaired first, so
+`LEEVEL`, `SUPERVIOSRY` and a stuck-pipe course bolted onto a supervisory
+booking all resolve rather than becoming phantom courses.
+
+> **This table disagrees with the dashboard.** `WELLSHARP_HOURS` in
+> `src/lib/config.ts`, ported from the Shiny app, gives every one of the six a
+> day less — 4/4/4/2/2/2 against 5/5/5/3/3/3 — and at six hours a day that is
+> the difference between 24 teaching hours and 30. It feeds the WellSharp tab's
+> hours figures and has deliberately not been touched here, because changing it
+> moves numbers that have already been reported.
+
 ### The daily schedule
 
 The schedule shows a day at a time, with the week above it marking which days

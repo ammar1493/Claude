@@ -1,4 +1,5 @@
 import { addDays, diffDays, fromISODate, toISODate } from "@/lib/dates";
+import { knownLength } from "./courses";
 import { classKey } from "./parse";
 import type { Booking, Conflict, Instructor, Leave, Language } from "./types";
 
@@ -237,6 +238,28 @@ export function findConflicts(
         detail: `${where}. Add it to ${instructor.name}'s list if the approval exists.`,
       });
     }
+  }
+
+  /*
+   * A course with an accredited length runs for that many days or it does not
+   * certify, so a class whose dates say otherwise is worth a look before the
+   * seats are sold — not an error, because the office books exam-only sittings
+   * and the odd extended class on purpose.
+   */
+  for (const cls of scope) {
+    const accredited = knownLength(cls.courseName);
+    if (!accredited || cls.days.length === accredited.days) continue;
+    out.push({
+      code: "course-length",
+      severity: "warning",
+      date: cls.startDate,
+      bookingIds: cls.bookings.map((b) => b.id),
+      instructorId: cls.instructorId,
+      title: `${cls.courseName} is booked over ${cls.days.length} day(s)`,
+      detail:
+        `${accredited.label} is accredited at ${accredited.days} day(s)` +
+        `${accredited.retake ? " for a retake" : ""}, and this class runs ${cls.days.length}.`,
+    });
   }
 
   /*

@@ -153,6 +153,7 @@ export type ConflictCode =
   | "on-leave"
   | "not-qualified"
   | "language"
+  | "course-length"
   | "po-missing"
   | "unconfirmed";
 

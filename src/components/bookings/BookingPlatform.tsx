@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BRAND } from "@/lib/brand";
+import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
 import {
   ceilingMonth,
   addDays,
@@ -235,13 +235,17 @@ export function BookingPlatform() {
                 )}
               </button>
             ))}
-            <a
-              href="/"
-              className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
-            >
-              <Icon name="gauge" size={15} />
-              <span className="hidden lg:inline">Dashboard</span>
-            </a>
+            {/* Only the booking platform is hosted in the standalone build,
+                so the link back to the dashboard would go nowhere. */}
+            {HAS_DASHBOARD && (
+              <a
+                href="/"
+                className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
+              >
+                <Icon name="gauge" size={15} />
+                <span className="hidden lg:inline">Dashboard</span>
+              </a>
+            )}
           </nav>
         </div>
       </header>

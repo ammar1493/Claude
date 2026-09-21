@@ -26,6 +26,23 @@ await build({
   logLevel: "info",
 });
 
+// The booking platform is the second page of the same bundle: its own script
+// and document, sharing the one stylesheet and the one logo.
+await build({
+  entryPoints: [path.join(root, "standalone/bookings.tsx")],
+  bundle: true,
+  minify: true,
+  format: "iife",
+  target: ["es2022"],
+  charset: "ascii",
+  jsx: "automatic",
+  loader: { ".png": "dataurl", ".gif": "dataurl" },
+  define: { "process.env.NODE_ENV": '"production"', __ASSET_BASE__: '""' },
+  outfile: path.join(out, "bookings.js"),
+  alias: { "@": path.join(root, "src") },
+  logLevel: "info",
+});
+
 // Tailwind v4 scans from the CSS file's own directory, so the entry lives at
 // the repo root where src/ is visible to it.
 execSync(
@@ -36,6 +53,7 @@ execSync(
 mkdirSync(path.join(out, "brand"), { recursive: true });
 copyFileSync(path.join(root, "public/brand/neft-logo.png"), path.join(out, "brand/neft-logo.png"));
 copyFileSync(path.join(root, "standalone/index.html"), path.join(out, "index.html"));
+copyFileSync(path.join(root, "standalone/bookings.html"), path.join(out, "bookings.html"));
 
 // The blank NE-HR050 form and the incentives letter, packed as base64 in one
 // .json: they are fetched at run time rather than bundled, and the artifact
@@ -48,4 +66,6 @@ copyFileSync(
 );
 
 const size = (f) => (readFileSync(path.join(out, f)).length / 1024).toFixed(0);
-console.log(`app.js ${size("app.js")} KB · styles.css ${size("styles.css")} KB`);
+console.log(
+  `app.js ${size("app.js")} KB · bookings.js ${size("bookings.js")} KB · styles.css ${size("styles.css")} KB`,
+);

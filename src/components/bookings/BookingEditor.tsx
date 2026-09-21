@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { toISODate } from "@/lib/dates";
+import { addDays, fromISODate, toISODate } from "@/lib/dates";
+import { knownLength } from "@/lib/bookings/courses";
 import { fmtClock, parseClock } from "@/lib/bookings/parse";
+import { datesBetween } from "@/lib/bookings/schedule";
 import { newId } from "@/lib/bookings/store";
 import {
   BOOKING_STATUS_LABEL,
@@ -84,6 +86,8 @@ export function BookingEditor({
   const [names, setNames] = useState(() => nameLines(draft.participants));
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<Booking>) => setDraft((d) => ({ ...d, ...patch }));
+  const accredited = knownLength(draft.courseName);
+  const spanDays = datesBetween(draft.startDate, draft.endDate).length;
 
   const save = () => {
     if (!draft.courseName.trim()) return setError("A booking needs a course.");
@@ -136,10 +140,19 @@ export function BookingEditor({
               list="neft-course-list"
               value={draft.courseName}
               onChange={(e) => {
-                const match = courses.find(
-                  (c) => c.name.toUpperCase() === e.target.value.toUpperCase(),
-                );
-                set({ courseName: e.target.value, courseCode: match?.code ?? draft.courseCode });
+                const name = e.target.value;
+                const match = courses.find((c) => c.name.toUpperCase() === name.toUpperCase());
+                /* A course accredited at a fixed length carries its own last
+                   day, so picking WellSharp Driller sets five days without
+                   anyone counting them out. */
+                const accredited = knownLength(name);
+                set({
+                  courseName: name,
+                  courseCode: match?.code ?? draft.courseCode,
+                  endDate: accredited
+                    ? toISODate(addDays(fromISODate(draft.startDate), accredited.days - 1))
+                    : draft.endDate,
+                });
               }}
               className={controlClass}
             />
@@ -183,13 +196,17 @@ export function BookingEditor({
             className={controlClass}
           />
         </Labelled>
-        <Labelled label="Last day">
+        <Labelled
+          label={accredited ? `Last day — accredited at ${accredited.days} day(s)` : "Last day"}
+        >
           <input
             type="date"
             value={draft.endDate}
             min={draft.startDate}
             onChange={(e) => set({ endDate: e.target.value })}
-            className={controlClass}
+            className={`${controlClass} ${
+              accredited && spanDays !== accredited.days ? "border-gold" : ""
+            }`}
           />
         </Labelled>
         {time(draft.startMin, (startMin) => set({ startMin }), "Starts")}
@@ -325,7 +342,13 @@ export function BookingEditor({
         </Button>
         <Button onClick={onCancel}>Cancel</Button>
         <span className="ms-auto text-xs text-slate-ink">
-          {fmtClock(draft.startMin)} – {fmtClock(draft.endMin)}
+          {spanDays} day{spanDays === 1 ? "" : "s"} · {fmtClock(draft.startMin)} –{" "}
+          {fmtClock(draft.endMin)}
+          {accredited && spanDays !== accredited.days && (
+            <strong className="ms-2 text-navy">
+              {accredited.label} runs {accredited.days}
+            </strong>
+          )}
         </span>
         {booking && onDelete && (
           <Button tone="quiet" onClick={() => onDelete(booking.id)}>

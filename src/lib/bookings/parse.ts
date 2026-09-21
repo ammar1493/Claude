@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { knownLength } from "./courses";
 import { cellToDate, cellToNumber, cellToString } from "@/lib/xlsx";
 import { addDays, diffDays, toISODate } from "@/lib/dates";
 import type {
@@ -299,11 +300,16 @@ export function parseBookingWorkbook(data: ArrayBuffer, now = new Date()): Impor
      * The date range is the truth about how long a course runs — the
      * "Course Duration" column disagrees with it on 2% of rows and is the one
      * that is wrong. But a range that runs backwards, or one that a mistyped
-     * year stretches over three years, is not a range at all; there the
-     * stated duration counts the days out from the start instead, and the row
-     * is reported so someone fixes the sheet.
+     * year stretches over three years, is not a range at all; there the days
+     * are counted out from the start instead, and the row is reported so
+     * someone fixes the sheet.
+     *
+     * What counts them is the accredited length where the course has one — a
+     * WellSharp course runs five days or three because IADC says so, which
+     * beats a hand-typed cell — and otherwise that cell.
      */
-    const statedDays = Math.max(1, Math.round(cellToNumber(at("days"))) || 1);
+    const accredited = knownLength(courseName);
+    const statedDays = accredited?.days ?? Math.max(1, Math.round(cellToNumber(at("days"))) || 1);
     let endDate = parseBookingDate(at("to"));
     if (!endDate || endDate < startDate || diffDays(endDate, startDate) > 60) {
       if (endDate) {
