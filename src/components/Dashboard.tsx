@@ -67,9 +67,18 @@ export function Dashboard() {
                 <span className="hidden lg:inline">{t.label}</span>
               </button>
             ))}
-            {/* Its own route rather than a tab: the verifier reads the record
-                sheet and the course list, not the training workbook the tabs
-                share, so it has nothing to gain from the dashboard's state. */}
+            {/* Their own routes rather than tabs: the verifier reads the
+                record sheet and the course list, and the booking platform its
+                own register — neither reads the training workbook the tabs
+                share, so neither has anything to gain from the dashboard's
+                state. */}
+            <a
+              href="/bookings"
+              className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,box-shadow,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
+            >
+              <Icon name="calendar-check" size={15} />
+              <span className="hidden lg:inline">Booking &amp; Scheduling</span>
+            </a>
             <a
               href="/incentives"
               className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,box-shadow,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "check:schedule": "node scripts/check-schedule.mjs",
     "build:standalone": "node standalone/build.mjs",
     "templates": "node scripts/build-templates.mjs",
     "predev": "node scripts/build-templates.mjs",

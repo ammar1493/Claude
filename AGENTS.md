@@ -139,6 +139,32 @@ contradicts the record sheet is reported as a conflict. Note also that the
 record sheet's `RigNo` is the *trainee's* rig, not where the course ran, so it
 never decides a rate band — `Location` does.
 
+## Bookings
+
+The `/bookings` register is its own record and its own IndexedDB keys, like the
+verifier — the dashboard's training workbook is what was delivered and this is
+what is still to come. The workbook is uploaded once; a second import merges,
+adding only bookings the register has never seen, because a status or an
+instructor set in the app is worth more than the sheet's guess at it.
+
+A booking is one company's group on one delivery; a class is the delivery
+itself, whoever is paying. POs and confirmations are per booking, instructors
+and every clash check per class — two companies in one classroom must not read
+as a double-booking. Keep that split.
+
+An instructor with an empty course list or an empty language list is approved
+for anything, so an office that has not filled the matrix in still gets a
+schedule. Auto-assign never books over leave, never over a clash, and never
+moves an assignment somebody already made; a class it cannot fill is left open
+with the reason rather than filled badly.
+
+The rules are asserted in `scripts/check-schedule.mjs` (`npm run
+check:schedule`) — change a rule, change a case, and say why in the case. The
+parsing is matched on wording, not on column position: the sheet has two
+columns called some form of "Location" and its times include `09:3O AM` with a
+letter O in them, so check a change against a whole file rather than the row
+that prompted it.
+
 ## Charts
 
 Chart label collisions are checked by measuring intersecting text bounding boxes

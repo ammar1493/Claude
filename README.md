@@ -19,7 +19,8 @@ using the same aggregation rules so the numbers match.
 | Quality Metrics | A scorecard over all thirteen evaluation questions: overall score, weakest questions, an instructor-by-question grid, who needs attention, and the raw counts per question |
 | Data Table | The filtered raw rows |
 
-`/incentives` is a separate route rather than a tab — see
+`/bookings` and `/incentives` are separate routes rather than tabs — see
+[Booking and scheduling](#booking-and-scheduling) and
 [Incentive verification](#incentive-verification).
 
 ## Incentive verification
@@ -263,6 +264,142 @@ and the scan is attached beside them. Reading dates off a photograph is not the
 kind of evidence a payment should rest on; if your cards arrive with a text
 layer, parsing them to pre-fill the form is the obvious next step.
 
+## Booking and scheduling
+
+`/bookings` is the booking sheet, digitalised. The office keeps every booking
+in one Excel workbook — one row per participant, 17,000 rows and growing — and
+that sheet cannot say who is teaching, whether the customer has actually
+confirmed, or whether the purchase order is in. So the daily plan is made by
+eye and a clash is found on the morning it happens.
+
+The workbook is uploaded **once**. After that the register lives in the app:
+new bookings are typed in, statuses are set, the schedule is built, and the
+Excel file becomes an export rather than the system of record.
+
+### What one booking is
+
+A **booking** is one company's group on one delivery: one course, one set of
+dates, one start time, one venue. The participant rows in the sheet are grouped
+into it. A **class** is what actually runs — the same course, dates, hour and
+venue, whoever is paying. Two companies sitting in the same classroom are two
+bookings and one class.
+
+The distinction does real work. Each company has its own purchase order and its
+own confirmation, so those are per booking. One instructor teaches the room, so
+the assignment and every clash check are per class — an instructor covering
+both companies is not double-booked, and the schedule would say they were if
+the two were not kept apart. The 17,813 participant rows in the September 2026
+sheet come out as 4,182 bookings across 3,338 classes.
+
+### The columns the sheet could not carry
+
+| Column | Values | Where it comes from on import |
+| --- | --- | --- |
+| Booking ref | `NB-0001`… | Assigned in date order |
+| Booking status | Not confirmed · Confirmed · Delivered · Cancelled | `Booking Status`; `CANCELLED` in either location column wins; anything already finished is set to Delivered |
+| PO status | Not required · PO not received · PO under process · PO received | Read from `PO#`: blank or `N / A` is not received, `UNDER PROCESS` is under process, anything else is a reference on file. NEFT's own work needs none |
+| Instructor | the roster | Nothing in the sheet — assigned here |
+| Delivery | Classroom · Online · Client site | The first `LOCATION` column |
+| Language | English · Arabic · Urdu · Not stated | The same column — it is what decides who can teach it |
+| Venue | `NEFT`, `NEFT-OUTBOUND`, or the site | The last `Location` column, with the office's three spellings of OUTBOUND folded together |
+| Trainees | count | The participant rows grouped into the booking |
+
+`Remarks` is dropped where it says `N / A`, which is 99% of the sheet, and kept
+as a note where it says anything else.
+
+Two of the office's own habits are honoured rather than corrected. Repeated
+participant names are kept and counted — a seat booked twice is a seat billed
+twice until someone says otherwise, the same rule the dashboard applies to the
+`Duplicates` column. And the record sheet's `RigNo` is the trainee's rig, never
+where the course ran, so it never decides anything.
+
+### Reading a sheet people fill in by hand
+
+Columns are found by their heading, not their position — the sheet has two
+columns both called some form of "Location", and the office adds one whenever
+it needs to. Values are matched on wording: dates arrive as `31/Dec/25` and as
+Excel serials, times as `8:30 AM`, `04:00PM`, and `09:3O AM` with a letter O
+where the zero should be. A half-typed meridiem is read from its first letter,
+and a class that would finish before it starts has the twelve hours added back,
+because `12:30 AP` against a 1:30 PM start is an afternoon nobody finished
+typing.
+
+The date range is the truth about how long a course runs — `Course Duration`
+disagrees with it on 2% of rows and is the one that is wrong. But a range that
+runs backwards, or one a mistyped year stretches to 2029, is not a range: there
+the stated duration counts the days out from the start, and the row is reported
+on the import screen so someone fixes the sheet. Thirteen rows in the September
+2026 file need that.
+
+### The daily schedule
+
+The schedule shows a day at a time, with the week above it marking which days
+still have a class nobody is teaching. A class carries its hours, venue,
+language, companies, trainee count and booking references, and one select
+assigns the instructor to the whole class. Every name in that select says why
+it would be a bad pick — *on leave*, *already teaching*, *not approved* —
+rather than leaving you to find out.
+
+**Fill the month** assigns the empty classes. The hardest class goes first, the
+one with the fewest people who could teach it, because a class with a single
+candidate loses that candidate if an easier class takes them first. Among the
+candidates, the one carrying the fewest days that month takes it, so the work
+spreads instead of piling onto whoever sorts first. Nothing already assigned is
+moved, and a class nothing can take is left open with the reason — a gap you
+can see is worth more than an assignment that is wrong.
+
+### Instructors, approvals and leave
+
+Neither fact the schedule needs is in the booking sheet: who can teach what,
+and who is away. Both are entered once and reused every month, the same way the
+verifier keeps its site distances.
+
+A new instructor is approved for **every** course and language until you narrow
+it, so a schedule can be built on day one and tightened later. An empty course
+list means any course; an empty language list means any language. A class whose
+language the sheet never stated is not held against anyone.
+
+Leave is entered against the plan rather than beside it. The month grid shows
+every instructor day by day — teaching, on leave, weekend — and booking a
+holiday over a class that person is already teaching says so as you save it.
+Friday and Saturday are marked as the weekend.
+
+### Plan check
+
+One list of everything that would go wrong if the month ran as written, split
+by what it asks of you:
+
+- **Has to be fixed** — a class with nobody on it, a class split between two
+  instructors, one person in two rooms at the same hour, someone teaching
+  through their own leave.
+- **Worth checking** — an instructor not approved for the course or the
+  language, a confirmed course with no purchase order behind it, a class
+  starting within a fortnight that the customer has still not confirmed.
+
+The rules are asserted against worked examples in `scripts/check-schedule.mjs`
+(`npm run check:schedule`) rather than only described here — change a rule and
+you change a case and say why.
+
+### Export
+
+**Export the month** writes a workbook for the planning month: `Bookings` (one
+row per participant, the sheet's own columns plus the new ones), `Schedule` (one
+row per class per day, which is the form the training floor reads),
+`Instructors`, `Leave` and `Conflicts`. Small enough to mail round. The backup —
+every booking the register holds, history included — is **Export every booking**
+on the import tab; two years of the sheet is 17,000 participant rows and a
+workbook to match, which is not what you want when you asked for September.
+
+Both are new workbooks, built rather than edited, so none of the care the
+incentive verifier takes over round-tripping a trainer's template applies.
+
+A second import **merges**: it adds bookings the register has never seen and
+touches nothing already decided here. Clearing the register is a separate,
+confirmed action, and it leaves the roster and the leave alone.
+
+Everything lives in the browser's IndexedDB — Vercel gives the app no writable
+disk, so the register is kept where the uploaded workbooks already are.
+
 ## Brand system
 
 Tokens live in `src/lib/brand.ts` and `src/app/globals.css`, taken from sections
@@ -324,6 +461,10 @@ The first sheet carrying all six required columns is used; extra columns
 untouched. **2023 has no workbook records, so those monthly figures stay hard-coded**
 in `MANUAL_2023` (`src/lib/config.ts`) and feed the Year-over-Year tab — the
 uploaded workbook only needs 2024 onwards.
+
+**Booking workbook.** Uploaded once at `/bookings` and kept in IndexedDB from
+then on — see [Booking and scheduling](#booking-and-scheduling). It is the only
+workbook the app treats as a starting point rather than as the record.
 
 **Qiddiya workbooks.** Add the QCTA file from the Qiddiya Academy tab, or commit
 it to `public/qiddiya/` (any `.xlsx` whose name contains `QCTA` or `Qiddiya` is
@@ -432,6 +573,7 @@ are CDN-cached for 15 minutes.
 ## Local development
 
 ```bash
-npm run dev        # http://localhost:3000
+npm run dev             # http://localhost:3000
 npm run typecheck
+npm run check:schedule  # the booking scheduler's rules, against worked examples
 ```
