@@ -13,10 +13,13 @@
  *
  * These are the office's own figures, not something read out of the data —
  * though the booking sheet's `Course Duration` column agrees with all six on
- * the rows where it is filled in. Note that `WELLSHARP_HOURS` in
- * `lib/config.ts`, ported from the Shiny app, says one day fewer for every one
- * of them; that table feeds the dashboard's WellSharp hours and has not been
- * touched, because changing it moves published figures.
+ * the rows where it is filled in.
+ *
+ * This is the one place they are written down. `WELLSHARP_HOURS` in
+ * `lib/config.ts`, which the dashboard's WellSharp hours are counted from,
+ * reads its days from here rather than repeating them: the two were written
+ * out separately once, drifted a day apart on all six, and understated
+ * WellSharp teaching hours by about 30% until somebody compared them.
  */
 
 export interface CourseLength {

@@ -1,3 +1,4 @@
+import { knownLength } from "./bookings/courses";
 import { MONTH_NAMES } from "./dates";
 
 /** DATA & GLOBALS block of app.R. */
@@ -56,24 +57,42 @@ export interface WellSharpHours {
   totalHours: number;
 }
 
+/**
+ * One row of the table, with its days taken from the accredited lengths in
+ * `bookings/courses.ts` wherever that list knows the course.
+ *
+ * The two used to be written out separately and drifted: this table carried
+ * the figures the Shiny app was written with, a day short on all six of the
+ * courses the office names, which understated WellSharp teaching hours by
+ * about 30%. Deriving one from the other is what stops that happening again;
+ * the days written here are the fallback for the courses that list does not
+ * cover, and `npm run check:schedule` fails if the two ever disagree.
+ */
+const wellsharp = (courseName: string, days: number, hoursPerDay = 6): WellSharpHours => {
+  const accredited = knownLength(courseName)?.days ?? days;
+  return { courseName, days: accredited, hoursPerDay, totalHours: accredited * hoursPerDay };
+};
+
 export const WELLSHARP_HOURS: WellSharpHours[] = [
-  { courseName: "IADC - WELLSHARP DRILLING DRILLER LEVEL", days: 4, hoursPerDay: 6, totalHours: 24 },
-  { courseName: "IADC - WELLSHARP DRILLING SUPERVISORY LEVEL", days: 4, hoursPerDay: 6, totalHours: 24 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING OGO", days: 4, hoursPerDay: 6, totalHours: 24 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING COILED TUBING", days: 2, hoursPerDay: 6, totalHours: 12 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING WIRELINE", days: 2, hoursPerDay: 6, totalHours: 12 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING WORKOVER", days: 2, hoursPerDay: 6, totalHours: 12 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING SNUBBING", days: 2, hoursPerDay: 6, totalHours: 12 },
-  { courseName: "IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL", days: 3, hoursPerDay: 6, totalHours: 18 },
-  // Retake Exam variants (typically 1 day)
-  { courseName: "IADC - WELLSHARP DRILLING DRILLER LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP DRILLING SUPERVISORY LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING OGO (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING COILED TUBING (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING WIRELINE (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING WORKOVER (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP WELL SERVICING SNUBBING (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
-  { courseName: "IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL (RETAKE EXAM)", days: 1, hoursPerDay: 6, totalHours: 6 },
+  wellsharp("IADC - WELLSHARP DRILLING DRILLER LEVEL", 5),
+  wellsharp("IADC - WELLSHARP DRILLING SUPERVISORY LEVEL", 5),
+  wellsharp("IADC - WELLSHARP WELL SERVICING OGO", 5),
+  wellsharp("IADC - WELLSHARP WELL SERVICING COILED TUBING", 3),
+  wellsharp("IADC - WELLSHARP WELL SERVICING WIRELINE", 3),
+  wellsharp("IADC - WELLSHARP WELL SERVICING WORKOVER", 3),
+  // Not among the six the office stated, so these keep the figures the Shiny
+  // app used. Neither appears in the booking sheet at all.
+  wellsharp("IADC - WELLSHARP WELL SERVICING SNUBBING", 2),
+  wellsharp("IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL", 3),
+  // Retake Exam variants: the exam alone, one day.
+  wellsharp("IADC - WELLSHARP DRILLING DRILLER LEVEL (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP DRILLING SUPERVISORY LEVEL (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP WELL SERVICING OGO (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP WELL SERVICING COILED TUBING (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP WELL SERVICING WIRELINE (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP WELL SERVICING WORKOVER (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP WELL SERVICING SNUBBING (RETAKE EXAM)", 1),
+  wellsharp("IADC - WELLSHARP DRILLING INTRODUCTORY LEVEL (RETAKE EXAM)", 1),
 ];
 
 /**
@@ -84,9 +103,20 @@ export const WELLSHARP_HOURS: WellSharpHours[] = [
  * wired in later without hunting for it.
  */
 export const HSE_KEYWORDS = [
-  "HSE", "SAFETY", "ENVIRONMENT", "HEALTH", "RISK",
-  "OSHA", "FIRST AID", "FIRE", "ERGONOMICS", "COSH",
-  "CONFINED SPACE", "WORK AT HEIGHT", "PTW", "ENVIRONMENTAL",
+  "HSE",
+  "SAFETY",
+  "ENVIRONMENT",
+  "HEALTH",
+  "RISK",
+  "OSHA",
+  "FIRST AID",
+  "FIRE",
+  "ERGONOMICS",
+  "COSH",
+  "CONFINED SPACE",
+  "WORK AT HEIGHT",
+  "PTW",
+  "ENVIRONMENTAL",
 ];
 
 /** Any uploaded workbook whose name matches is treated as a QCTA file. */

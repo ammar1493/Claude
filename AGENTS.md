@@ -164,9 +164,12 @@ a retake is the exam alone at one (`bookings/courses.ts`). That is the office's
 figure and beats the sheet's hand-typed `Course Duration` cell. Match the whole
 course name, never a keyword: "SLICK LINE/WIRELINE APPLICATIONS" and "ADVANCED
 WORKOVER OPERATIONS WORKSHOP" are different courses and must not pick up a
-length. `WELLSHARP_HOURS` in `lib/config.ts` says a day less for all six and
-feeds the dashboard's reported hours; it is deliberately left alone, so do not
-"reconcile" the two without asking.
+length. `WELLSHARP_HOURS` in `lib/config.ts`, which feeds the dashboard's
+reported hours, takes its days from that same list rather than repeating them —
+the two were written out separately, drifted a day apart on all six, and
+understated WellSharp hours by about 30% until somebody compared them. Snubbing
+and Drilling Introductory Level are outside the office's six and keep the Shiny
+app's figures. `npm run check:schedule` fails if the two tables disagree.
 
 The rules are asserted in `scripts/check-schedule.mjs` (`npm run
 check:schedule`) — change a rule, change a case, and say why in the case. The

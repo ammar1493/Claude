@@ -366,12 +366,24 @@ not a supervisory level. The office's own drift is repaired first, so
 `LEEVEL`, `SUPERVIOSRY` and a stuck-pipe course bolted onto a supervisory
 booking all resolve rather than becoming phantom courses.
 
-> **This table disagrees with the dashboard.** `WELLSHARP_HOURS` in
-> `src/lib/config.ts`, ported from the Shiny app, gives every one of the six a
-> day less — 4/4/4/2/2/2 against 5/5/5/3/3/3 — and at six hours a day that is
-> the difference between 24 teaching hours and 30. It feeds the WellSharp tab's
-> hours figures and has deliberately not been touched here, because changing it
-> moves numbers that have already been reported.
+**The dashboard reads the same table.** `WELLSHARP_HOURS` in
+`src/lib/config.ts` used to be written out separately and had drifted: ported
+from the Shiny app, it gave every one of the six a day less — 4/4/4/2/2/2 — so
+at six hours a day the WellSharp tab counted 24 teaching hours where the course
+runs 30. It now takes its days from the list above wherever that list knows the
+course, and `npm run check:schedule` fails if the two ever disagree again.
+
+Correcting it raised WellSharp teaching hours by about **30%**: across the 140
+non-retake WellSharp classes booked in 2026, 468 teaching days became 608, and
+2,808 hours became 3,648. The five-day courses gained 25%, the three-day
+courses 50%. Retakes are unchanged — the exam alone, one day, either way.
+**Anything reported from the WellSharp tab before this change is on the old
+basis and will not match what the tab shows now.**
+
+Two courses in that table are outside the six and keep the Shiny app's figures,
+because the office has not stated them and neither appears in the booking
+sheet: `WELL SERVICING SNUBBING` (2 days) and `DRILLING INTRODUCTORY LEVEL`
+(3 days). If the same off-by-one applies to them, they are still wrong.
 
 ### The daily schedule
 

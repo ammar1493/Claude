@@ -27,6 +27,7 @@ import { toISODate } from "@/lib/dates";
 import { autoAssign, buildClasses, findConflicts } from "@/lib/bookings/schedule";
 import { parseClock, parseBookingDate } from "@/lib/bookings/parse";
 import { knownLength } from "@/lib/bookings/courses";
+import { WELLSHARP_HOURS } from "@/lib/config";
 import type { Booking, Instructor, Leave } from "@/lib/bookings/types";
 
 let seq = 0;
@@ -126,6 +127,22 @@ is("a class booked short of its accreditation is flagged",
 is("a class booked to its accreditation is not",
   codes([bk({ courseName: "DRILLER LEVEL 3", instructorId: "i1", endDate: "2026-10-09" })], [ins({})]),
   []);
+
+// The dashboard's hours table and the accredited lengths are one table now.
+// They were two, and drifted a day apart on all six courses, which understated
+// WellSharp teaching hours by about 30% for as long as nobody compared them.
+for (const row of WELLSHARP_HOURS) {
+  const accredited = knownLength(row.courseName);
+  if (!accredited) continue;
+  is("WELLSHARP_HOURS agrees with the accreditation for " + row.courseName,
+    { days: row.days, totalHours: row.totalHours },
+    { days: accredited.days, totalHours: accredited.days * row.hoursPerDay });
+}
+is("the six the office named are 5/5/5/3/3/3",
+  ["DRILLING DRILLER LEVEL", "DRILLING SUPERVISORY LEVEL", "WELL SERVICING OGO",
+   "WELL SERVICING COILED TUBING", "WELL SERVICING WIRELINE", "WELL SERVICING WORKOVER"]
+    .map((n) => WELLSHARP_HOURS.find((h) => h.courseName === "IADC - WELLSHARP " + n)?.days),
+  [5, 5, 5, 3, 3, 3]);
 
 // The sheet's own spellings. The letter O for a zero and a half-typed meridiem
 // are what trainers actually type, and both have to read as a real time.
