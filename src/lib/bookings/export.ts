@@ -1,7 +1,15 @@
 import * as XLSX from "xlsx";
 import { saveFile } from "@/lib/incentives/download";
+import { DAILY_COLUMNS, dailyRowValues, dailySheetLines, sheetDate } from "./dailySheet";
+import { buildStyledSheet, type SheetRow } from "./xlsxSheet";
 import { fmtClock } from "./parse";
-import { buildClasses, datesBetween, findConflicts, type PlanWindow } from "./schedule";
+import {
+  buildClasses,
+  datesBetween,
+  findConflicts,
+  type ClassSession,
+  type PlanWindow,
+} from "./schedule";
 import {
   BOOKING_STATUS_LABEL,
   LANGUAGE_LABEL,
@@ -189,4 +197,34 @@ export async function downloadRegister(
       : `NEFT-Bookings-${window.from}-to-${window.to}.xlsx`,
     new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
   );
+}
+
+/** Column widths for the daily sheet, in Excel's character units. */
+const DAILY_WIDTHS = [38, 11, 24, 16, 11, 12, 13, 12, 26];
+
+/**
+ * The day's schedule as the office's own one-page sheet.
+ *
+ * One file, one day, the nine columns it already has — the thing that gets
+ * attached to an email at eight in the morning.
+ */
+export async function downloadDailySheet(
+  classes: ClassSession[],
+  instructors: Instructor[],
+  dayISO: string,
+): Promise<{ rows: number; saved: boolean }> {
+  const lines = dailySheetLines(classes, instructors, dayISO);
+  const rows: SheetRow[] = lines.map((line) => (line ? dailyRowValues(line) : null));
+  const bytes = await buildStyledSheet(
+    sheetDate(dayISO),
+    DAILY_COLUMNS.map((header, i) => ({ header, width: DAILY_WIDTHS[i] })),
+    rows,
+  );
+  const outcome = await saveFile(
+    `NEFT-Daily-Schedule-${dayISO}.xlsx`,
+    new Blob([bytes as BlobPart], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+  );
+  return { rows: lines.filter(Boolean).length, saved: outcome !== "failed" };
 }

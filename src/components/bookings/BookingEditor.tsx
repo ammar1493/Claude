@@ -46,6 +46,7 @@ const blank = (courses: CourseRef[], ref: string): Booking => {
     endMin: 12 * 60 + 30,
     hours: 4,
     venue: "NEFT",
+    room: "",
     mode: "classroom",
     language: "english",
     company: "",
@@ -230,6 +231,14 @@ export function BookingEditor({
           <input
             value={draft.venue}
             onChange={(e) => set({ venue: e.target.value.toUpperCase() })}
+            className={controlClass}
+          />
+        </Labelled>
+        <Labelled label="Classroom">
+          <input
+            value={draft.room}
+            onChange={(e) => set({ room: e.target.value.toUpperCase() })}
+            placeholder={draft.venue === "NEFT" ? "5, LAB…" : "off site"}
             className={controlClass}
           />
         </Labelled>

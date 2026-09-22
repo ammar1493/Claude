@@ -171,6 +171,21 @@ understated WellSharp hours by about 30% until somebody compared them. Snubbing
 and Drilling Introductory Level are outside the office's six and keep the Shiny
 app's figures. `npm run check:schedule` fails if the two tables disagree.
 
+The daily sheet (`dailySheet.ts`) is the office's own nine-column layout and
+the thing that gets emailed, so its columns, its wording and its blocking are
+the office's, not ours — blank line whenever the hour or the kind of delivery
+changes. It is written as a real .xlsx by `xlsxSheet.ts` rather than by
+SheetJS, because the community build cannot write the header fill or the
+banding and without them it is not the same document; that writer does one
+styled table and should not grow into a general one. Its blue is Excel's own
+table style, deliberately not the brand navy: the sheet has gone out looking
+like this for years and nobody receiving it should have to notice it changed
+hands.
+
+A classroom is entered by the office, like a site distance — the booking sheet
+has no room column — and two classes in one room at one hour is an error in the
+plan check, same as one instructor in two rooms.
+
 The rules are asserted in `scripts/check-schedule.mjs` (`npm run
 check:schedule`) — change a rule, change a case, and say why in the case. The
 parsing is matched on wording, not on column position: the sheet has two

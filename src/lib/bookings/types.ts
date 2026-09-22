@@ -91,6 +91,13 @@ export interface Booking {
   hours: number;
   /** Normalised venue: "NEFT", "NEFT-OUTBOUND", or the client site. */
   venue: string;
+  /**
+   * The room it runs in — "5", "LAB", whatever the office calls it. Nothing in
+   * the booking sheet says, so it is typed in here, and it is what the daily
+   * schedule's CLASSROOM column carries. Off site there is no room to give and
+   * the schedule prints the venue instead.
+   */
+  room: string;
   mode: DeliveryMode;
   language: Language;
   company: string;
@@ -153,6 +160,7 @@ export type ConflictCode =
   | "on-leave"
   | "not-qualified"
   | "language"
+  | "room-clash"
   | "course-length"
   | "po-missing"
   | "unconfirmed";

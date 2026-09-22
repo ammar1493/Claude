@@ -394,6 +394,11 @@ assigns the instructor to the whole class. Every name in that select says why
 it would be a bad pick — *on leave*, *already teaching*, *not approved* —
 rather than leaving you to find out.
 
+Each class carries a **classroom** — "5", "LAB", whatever the office calls it.
+Nothing in the booking sheet says which room a class is in, so it is typed in
+here, and two classes put in the same room at the same hour are reported in the
+plan check the same way one instructor in two rooms is.
+
 **Fill the month** assigns the empty classes. The hardest class goes first, the
 one with the fewest people who could teach it, because a class with a single
 candidate loses that candidate if an easier class takes them first. Among the
@@ -401,6 +406,41 @@ candidates, the one carrying the fewest days that month takes it, so the work
 spreads instead of piling onto whoever sorts first. Nothing already assigned is
 moved, and a class nothing can take is left open with the reason — a gap you
 can see is worth more than an assignment that is wrong.
+
+### The sheet that goes out by email
+
+**Sheet to send** swaps the working view for the one-page schedule the office
+already mails each morning — the same nine columns, in the same order:
+
+| Column | Where it comes from |
+| --- | --- |
+| COURSE TITLE | The course, the language it runs in, and `(DAY n)` on a multi-day course |
+| CLASS TIME | The class's start |
+| INSTRUCTOR NAME | Who is assigned; **NOT ASSIGNED** in bold when nobody is |
+| VENUE | The class's venue |
+| DATE | `22-Sep-26` |
+| Number of Participant | Trainees booked across every company in the class |
+| SESSION | `CLASSROOM` at NEFT, `OUTBOUND` anywhere else, `ONLINE` online |
+| CLASSROOM | The room; off site, where it is instead |
+| COMPANY | Every company in the class, slash-separated |
+
+Rows run in time order with a blank line wherever the hour or the kind of
+delivery changes, which is what puts the morning classroom intake, the outbound
+work and the afternoon intake into separate blocks.
+
+**Export the sheet** writes it as an .xlsx — blue header, banded rows, frozen
+heading, landscape and fitted to one page wide, ready to attach. **Print / save
+as PDF** puts the same thing through the browser's print dialog for anyone who
+would rather send a PDF.
+
+That file is built rather than handed to SheetJS: the community build cannot
+write a cell fill, and without the fills it is not the same document. An .xlsx
+is a zip of XML and this table needs six small parts, so `xlsxSheet.ts` writes
+them directly. It does one styled table and is not a general writer — it should
+not grow into one.
+
+The header says COURSE **TITLE**; the office's own sheet says TITTLE. That is
+the one thing here that is deliberately not copied.
 
 ### Instructors, approvals and leave
 

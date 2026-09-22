@@ -23,6 +23,8 @@ export interface ClassSession {
   startMin: number;
   endMin: number;
   venue: string;
+  /** Agreed across the class's bookings; the first one set wins. */
+  room: string;
   language: Language;
   /** Every calendar day the class occupies, start to end inclusive. */
   days: string[];
@@ -67,6 +69,7 @@ export function buildClasses(bookings: Booking[]): ClassSession[] {
       startMin: head.startMin,
       endMin: list.reduce((max, b) => Math.max(max, b.endMin), head.endMin),
       venue: head.venue,
+      room: list.find((b) => b.room)?.room ?? "",
       language: head.language,
       days: datesBetween(
         head.startDate,
@@ -237,6 +240,39 @@ export function findConflicts(
           : `${instructor.name} is not approved for this course`,
         detail: `${where}. Add it to ${instructor.name}'s list if the approval exists.`,
       });
+    }
+  }
+
+  /*
+   * Two classes in one room. Only rooms somebody has actually filled in are
+   * compared, and only within a venue — "ADES YARD" means a different place
+   * at ADES than it does at NEFT.
+   */
+  const byRoom = new Map<string, ClassSession[]>();
+  for (const cls of scope) {
+    if (!cls.room) continue;
+    const key = `${cls.venue}|${cls.room}`;
+    const list = byRoom.get(key);
+    if (list) list.push(cls);
+    else byRoom.set(key, [cls]);
+  }
+  for (const sharing of byRoom.values()) {
+    for (let i = 0; i < sharing.length; i++) {
+      for (let j = i + 1; j < sharing.length; j++) {
+        const a = sharing[i];
+        const b = sharing[j];
+        if (!overlaps(a, b)) continue;
+        const day = a.days.find((d) => b.days.includes(d)) ?? a.startDate;
+        out.push({
+          code: "room-clash",
+          severity: "error",
+          date: day,
+          bookingIds: [...a.bookings.map((x) => x.id), ...b.bookings.map((x) => x.id)],
+          instructorId: a.instructorId,
+          title: `Classroom ${a.room} is booked twice`,
+          detail: `On ${day}: ${a.courseName} and ${b.courseName} are both in ${a.room} at ${a.venue}.`,
+        });
+      }
     }
   }
 

@@ -207,7 +207,9 @@ export function BookingPlatform() {
 
   return (
     <div className="min-h-screen [--nav-h:64px]">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-white">
+      {/* The sheet view is printed to make the morning's PDF, so the app's own
+          chrome stays off the page. */}
+      <header className="no-print sticky top-0 z-30 border-b border-hairline bg-white">
         <div className="flex h-(--nav-h) flex-wrap items-center gap-3 px-4">
           <img src={BRAND.logo} alt="NEFT Energies" className="h-9 w-auto shrink-0" />
           <span className="text-base font-bold tracking-tight text-navy sm:text-lg">
@@ -254,7 +256,7 @@ export function BookingPlatform() {
         {/* The register bar. What the dashboard's workbook bar does for the
             training export: says what is loaded before anyone questions a
             number that comes out of it. */}
-        <div className="surface-card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-white px-4 py-3 text-sm">
+        <div className="no-print surface-card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-white px-4 py-3 text-sm">
           <span className="flex items-center gap-2 font-bold text-navy">
             <Icon name="calendar" size={16} />
             {meta ? meta.fileName : "No booking sheet imported yet"}
@@ -294,7 +296,7 @@ export function BookingPlatform() {
         </div>
 
         {notice && (
-          <p className="mb-4 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink shadow-[var(--shadow-card)]">
+          <p className="no-print mb-4 rounded-xl border-l-4 border-l-gold bg-white px-4 py-3 text-sm text-slate-ink shadow-[var(--shadow-card)]">
             {notice}
           </p>
         )}
@@ -321,6 +323,7 @@ export function BookingPlatform() {
                 leaves={leaves}
                 window={window_}
                 onAssign={(ids, instructorId) => patchMany(ids, { instructorId })}
+                onRoom={(ids, room) => patchMany(ids, { room })}
                 onApply={applyAssignments}
                 onNotice={setNotice}
               />
@@ -372,7 +375,7 @@ export function BookingPlatform() {
           </>
         )}
 
-        <footer className="mt-10 flex flex-col items-center gap-3 border-t border-hairline pt-6 text-center text-xs text-slate-ink">
+        <footer className="no-print mt-10 flex flex-col items-center gap-3 border-t border-hairline pt-6 text-center text-xs text-slate-ink">
           <img src={BRAND.logo} alt="" aria-hidden className="h-7 w-auto opacity-70" />
           <p>
             {BRAND.name} · Booking &amp; Scheduling · {new Date().getFullYear()}

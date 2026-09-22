@@ -30,7 +30,14 @@ export interface RegisterMeta {
   lastDate: string | null;
 }
 
-export const loadBookings = () => getSetting<Booking[]>(KEYS.bookings).then((v) => v ?? []);
+/*
+ * A register written before a field existed is still the office's register,
+ * so what is missing is filled in on the way out rather than migrated.
+ */
+export const loadBookings = () =>
+  getSetting<Booking[]>(KEYS.bookings).then((v) =>
+    (v ?? []).map((b) => ({ ...b, room: b.room ?? "" })),
+  );
 export const saveBookings = (v: Booking[]) => putSetting(KEYS.bookings, v);
 
 export const loadInstructors = () =>

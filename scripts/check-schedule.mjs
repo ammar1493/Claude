@@ -27,6 +27,7 @@ import { toISODate } from "@/lib/dates";
 import { autoAssign, buildClasses, findConflicts } from "@/lib/bookings/schedule";
 import { parseClock, parseBookingDate } from "@/lib/bookings/parse";
 import { knownLength } from "@/lib/bookings/courses";
+import { dailySheetLines } from "@/lib/bookings/dailySheet";
 import { WELLSHARP_HOURS } from "@/lib/config";
 import type { Booking, Instructor, Leave } from "@/lib/bookings/types";
 
@@ -41,7 +42,7 @@ const is = (what: string, got: unknown, want: unknown) => {
 const bk = (p: Partial<Booking>): Booking => ({
   id: "b" + ++seq, ref: "NB-" + seq, courseName: "H2S", courseCode: "NEFT 002",
   startDate: "2026-10-05", endDate: "2026-10-05", startMin: 510, endMin: 750, hours: 4,
-  venue: "NEFT", mode: "classroom", language: "english", company: "SLB", requestor: "",
+  venue: "NEFT", room: "", mode: "classroom", language: "english", company: "SLB", requestor: "",
   requestDate: null, poNumber: "123", poStatus: "received", status: "confirmed",
   instructorId: null, participants: [], notes: "", createdAt: 0, updatedAt: 0, ...p,
 });
@@ -98,6 +99,46 @@ is("cancelled and delivered classes are out of the plan",
 is("a missing PO is a warning",
   codes([bk({ instructorId: "i1", poStatus: "not-received", poNumber: "" })], [ins({})]),
   ["warning:po-missing"]);
+
+// The sheet that goes out by email: nine columns, blocked by the hour and the
+// kind of delivery, with the day of a multi-day course spelled out.
+{
+  const people = [ins({ name: "A" }), ins({ id: "i2", name: "B" })];
+  const lines = dailySheetLines(
+    buildClasses([
+      bk({ courseName: "H2S", instructorId: "i1", room: "5" }),
+      bk({ courseName: "PTW", instructorId: "i2", startMin: 810, endMin: 990, room: "5" }),
+      bk({ courseName: "RIGGER 3", venue: "ADES YARD", startMin: 450, endMin: 690,
+           startDate: "2026-10-03", endDate: "2026-10-07" }),
+    ]),
+    people,
+    "2026-10-05",
+  );
+  is("a blank line separates each hour and kind of delivery",
+    lines.map((l) => (l ? l.title : "--")),
+    ["RIGGER 3 ENGLISH (DAY 3)", "--", "H2S ENGLISH", "--", "PTW ENGLISH"]);
+  is("NEFT's own room is the classroom", lines[2] && lines[2].classroom, "5");
+  is("off site, the sheet names the place instead", lines[0] && lines[0].classroom, "ADES YARD");
+  is("anything that is not NEFT's classroom is outbound",
+    lines.filter(Boolean).map((l) => l.session), ["OUTBOUND", "CLASSROOM", "CLASSROOM"]);
+  is("an unassigned class leaves the instructor blank for the sheet to shout about",
+    lines[0] && lines[0].instructor, "");
+}
+// A room is a resource like a trainer: two classes cannot share one.
+is("two classes in one room clash",
+  codes([bk({ courseName: "H2S", instructorId: "i1", room: "5" }),
+         bk({ courseName: "PTW", instructorId: "i2", room: "5" })],
+    [ins({}), ins({ id: "i2", name: "B" })]),
+  ["error:room-clash"]);
+is("the same room at different hours does not",
+  codes([bk({ courseName: "H2S", instructorId: "i1", room: "5" }),
+         bk({ courseName: "PTW", instructorId: "i2", room: "5", startMin: 810, endMin: 990 })],
+    [ins({}), ins({ id: "i2", name: "B" })]),
+  []);
+is("a room nobody has filled in is not a clash",
+  codes([bk({ courseName: "H2S", instructorId: "i1" }), bk({ courseName: "PTW", instructorId: "i2" })],
+    [ins({}), ins({ id: "i2", name: "B" })]),
+  []);
 
 // The office's WellSharp lengths: OGO, Supervisor and Driller run five days,
 // Coiled Tubing, Wireline and Workover three, and a retake is the exam alone.

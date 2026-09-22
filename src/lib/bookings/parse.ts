@@ -361,6 +361,8 @@ export function parseBookingWorkbook(data: ArrayBuffer, now = new Date()): Impor
       endMin,
       hours: cellToNumber(at("hours")),
       venue,
+      // The booking sheet has no room column; it is filled in here.
+      room: "",
       mode: modeOf(modeCell, venue),
       language: languageOf(modeCell),
       company,
