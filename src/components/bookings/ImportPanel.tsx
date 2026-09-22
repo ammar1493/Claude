@@ -38,6 +38,7 @@ export function ImportPanel({
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const warnings = result?.warnings ?? meta?.warnings;
 
   const take = async (file: File | undefined) => {
     if (!file) return;
@@ -136,16 +137,16 @@ export function ImportPanel({
         </Card>
       )}
 
-      {result && (
-        <Card
-          title={`Rows the sheet could not settle — ${result.warnings.length}`}
-          expandable={false}
-        >
-          {!result.warnings.length ? (
+      {/* Read from the stored import rather than from this visit's parse, so
+          the list is still here tomorrow when somebody gets round to fixing
+          the sheet. */}
+      {warnings && (
+        <Card title={`Rows the sheet could not settle — ${warnings.length}`} expandable={false}>
+          {!warnings.length ? (
             <Empty>Every row read cleanly.</Empty>
           ) : (
             <ul className="flex list-disc flex-col gap-1 ps-5 text-xs leading-relaxed text-slate-ink">
-              {result.warnings.map((w) => (
+              {warnings.map((w) => (
                 <li key={w}>{w}</li>
               ))}
             </ul>

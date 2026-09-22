@@ -176,6 +176,7 @@ export function BookingPlatform() {
       rowCount: parsed.rowCount,
       firstDate: parsed.firstDate,
       lastDate: parsed.lastDate,
+      warnings: parsed.warnings,
     };
     setMeta(nextMeta);
     void saveMeta(nextMeta);

@@ -28,6 +28,12 @@ export interface RegisterMeta {
   rowCount: number;
   firstDate: string | null;
   lastDate: string | null;
+  /**
+   * Rows the parser could not take at face value, kept with the import rather
+   * than shown once and lost. They name a row in the office's own sheet that
+   * somebody has to correct, and that outlives the moment of importing.
+   */
+  warnings?: string[];
 }
 
 /*
