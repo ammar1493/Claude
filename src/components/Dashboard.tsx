@@ -3,7 +3,8 @@
 import { useCallback, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { useDashboard } from "@/state/DashboardContext";
-import { Icon, type IconName } from "./Icons";
+import { AppBar, TabBar, type TabGroup } from "./AppNav";
+import { Icon } from "./Icons";
 import { Sidebar } from "./Sidebar";
 import { WorkbookBar } from "./WorkbookBar";
 import { WorkbookDropzone } from "./WorkbookDropzone";
@@ -16,15 +17,36 @@ import { Takamol } from "./tabs/Takamol";
 import { WellSharp } from "./tabs/WellSharp";
 import { YearOverYear } from "./tabs/YearOverYear";
 
-const TABS: { id: string; label: string; icon: IconName }[] = [
-  { id: "exec", label: "Executive Summary", icon: "gauge" },
-  { id: "yoy", label: "Year-over-Year", icon: "chart-line" },
-  { id: "hse", label: "HSE", icon: "shield" },
-  { id: "wellsharp", label: "WellSharp", icon: "hard-hat" },
-  { id: "qiddiya", label: "Qiddiya Academy", icon: "building" },
-  { id: "takamol", label: "Takamol", icon: "handshake" },
-  { id: "quality", label: "Quality Metrics", icon: "star" },
-  { id: "data", label: "Data Table", icon: "table" },
+/**
+ * The eight views, in three groups: what the period did, the programmes it did
+ * it through, and the evidence underneath. The grouping is the office's own —
+ * Qiddiya and Takamol are projects the way HSE and WellSharp are disciplines,
+ * and both sit apart from the summaries that read across all of them.
+ */
+const TAB_GROUPS: TabGroup<string>[] = [
+  {
+    label: "Overview",
+    tabs: [
+      { id: "exec", label: "Executive Summary", icon: "gauge" },
+      { id: "yoy", label: "Year-over-Year", icon: "chart-line" },
+    ],
+  },
+  {
+    label: "Programmes",
+    tabs: [
+      { id: "hse", label: "HSE", icon: "shield" },
+      { id: "wellsharp", label: "WellSharp", icon: "hard-hat" },
+      { id: "qiddiya", label: "Qiddiya Academy", icon: "building" },
+      { id: "takamol", label: "Takamol", icon: "handshake" },
+    ],
+  },
+  {
+    label: "Evidence",
+    tabs: [
+      { id: "quality", label: "Quality Metrics", icon: "star" },
+      { id: "data", label: "Data Table", icon: "table" },
+    ],
+  },
 ];
 
 /** Tabs that read the training workbook and cannot render without it. */
@@ -45,49 +67,8 @@ export function Dashboard() {
         and light neutrals only, and reserve the knockout version for navy.
       */}
       <header className="sticky top-0 z-30 border-b border-hairline bg-white">
-        <div className="flex h-(--nav-h) flex-wrap items-center gap-3 px-4">
-          <img src={BRAND.logo} alt="NEFT Energies" className="h-9 w-auto shrink-0" />
-          <span className="text-base font-bold tracking-tight text-navy sm:text-lg">
-            NEFT Training Analytics
-          </span>
-          <nav className="no-print ml-auto flex flex-wrap items-center gap-0.5">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActive(t.id)}
-                aria-current={active === t.id ? "page" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-[color,background-color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === t.id
-                    ? "bg-navy text-white"
-                    : "text-slate-ink hover:bg-navy-050 hover:text-navy"
-                }`}
-              >
-                <Icon name={t.icon} size={15} />
-                <span className="hidden lg:inline">{t.label}</span>
-              </button>
-            ))}
-            {/* Their own routes rather than tabs: the verifier reads the
-                record sheet and the course list, and the booking platform its
-                own register — neither reads the training workbook the tabs
-                share, so neither has anything to gain from the dashboard's
-                state. */}
-            <a
-              href="/bookings"
-              className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,box-shadow,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
-            >
-              <Icon name="calendar-check" size={15} />
-              <span className="hidden lg:inline">Booking &amp; Scheduling</span>
-            </a>
-            <a
-              href="/incentives"
-              className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,box-shadow,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
-            >
-              <Icon name="check-circle" size={15} />
-              <span className="hidden lg:inline">Incentive Verification</span>
-            </a>
-          </nav>
-        </div>
+        <AppBar current="dashboard" title="NEFT Training Analytics" />
+        <TabBar groups={TAB_GROUPS} active={active} onSelect={setActive} />
       </header>
 
       <div className="flex flex-col lg:flex-row">
@@ -106,7 +87,10 @@ export function Dashboard() {
             <>
               <WorkbookBar />
               {active === "exec" && (
-                <ExecutiveSummary projectScope={projectScope} onProjectScopeChange={setProjectScope} />
+                <ExecutiveSummary
+                  projectScope={projectScope}
+                  onProjectScopeChange={setProjectScope}
+                />
               )}
               {active === "yoy" && <YearOverYear />}
               {active === "hse" && <Hse />}
@@ -122,7 +106,9 @@ export function Dashboard() {
             <img src={BRAND.logo} alt="" aria-hidden className="h-7 w-auto opacity-70" />
             <p>
               {BRAND.name} · Training Analytics · {new Date().getFullYear()}
-              {process.env.NEXT_PUBLIC_BUILD_SHA ? ` · build ${process.env.NEXT_PUBLIC_BUILD_SHA}` : ""}
+              {process.env.NEXT_PUBLIC_BUILD_SHA
+                ? ` · build ${process.env.NEXT_PUBLIC_BUILD_SHA}`
+                : ""}
             </p>
           </footer>
         </main>

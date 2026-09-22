@@ -193,6 +193,18 @@ columns called some form of "Location" and its times include `09:3O AM` with a
 letter O in them, so check a change against a whole file rather than the row
 that prompted it.
 
+## Navigation
+
+`AppNav.tsx` holds the header the three sections share: `AppBar` is the 64px
+bar (mark, section name, links to the other two) and `TabBar` is the grouped
+row of that section's own views beneath it. The verifier keeps its own bar,
+because its month chip and four actions wrap on purpose, and takes only
+`SectionLinks`.
+
+Keep the view row scrolling rather than wrapping. The two rows were one until
+ten items spilled out of the bar and through the content at every width from
+1024 to 1600, and a wrapping row inside a fixed-height bar is what caused it.
+
 ## Charts
 
 Chart label collisions are checked by measuring intersecting text bounding boxes

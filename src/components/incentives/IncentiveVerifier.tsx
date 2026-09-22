@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
+import { BRAND } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
 import { payableTotal } from "@/lib/incentives/correct";
 import { saveFile } from "@/lib/incentives/download";
@@ -39,6 +39,7 @@ import {
   putSetting,
   putWorkbook,
 } from "@/lib/storage";
+import { SectionLinks } from "../AppNav";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
 import { FileSlot } from "./FileSlot";
@@ -724,26 +725,9 @@ export function IncentiveVerifier() {
                 </button>
               </>
             )}
-            {/* Only the verifier is hosted in the standalone build, so links
-                to the rest of the app would go nowhere. */}
-            {HAS_DASHBOARD && (
-              <>
-                <a
-                  href="/bookings"
-                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
-                >
-                  <Icon name="calendar-check" size={14} />
-                  Booking &amp; Scheduling
-                </a>
-                <a
-                  href="/"
-                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
-                >
-                  <Icon name="gauge" size={14} />
-                  Dashboard
-                </a>
-              </>
-            )}
+            {/* Shared with the other two headers, and left out of the
+                standalone build, which hosts this page alone. */}
+            <SectionLinks current="incentives" />
           </nav>
         </div>
       </header>

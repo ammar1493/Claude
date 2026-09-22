@@ -23,6 +23,20 @@ using the same aggregation rules so the numbers match.
 [Booking and scheduling](#booking-and-scheduling) and
 [Incentive verification](#incentive-verification).
 
+## Navigation
+
+A header answers two questions and they belong on two rows, not one. The bar
+carries the mark, the section's name and the way to the other two sections;
+the row under it carries that section's own views, grouped — Overview,
+Programmes, Evidence on the dashboard; Today, The record, Checks in the
+booking platform. All of it lives in `src/components/AppNav.tsx`.
+
+Both were on one line until the ten items wrapped and spilled out of the 64px
+bar at every width between 1024 and 1600 — most laptops. The view row now
+scrolls sideways rather than wrapping, so adding a tab can never put the
+header back through the content beneath it. Below `lg` the labels drop and the
+icons carry it; each keeps its `title`.
+
 ## Incentive verification
 
 `/incentives` checks the time sheets trainers submit for their monthly

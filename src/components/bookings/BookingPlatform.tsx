@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BRAND, HAS_DASHBOARD } from "@/lib/brand";
+import { BRAND } from "@/lib/brand";
 import {
   ceilingMonth,
   addDays,
@@ -27,7 +27,8 @@ import {
   type RegisterMeta,
 } from "@/lib/bookings/store";
 import type { Booking, CourseRef, Instructor, Leave } from "@/lib/bookings/types";
-import { Icon, type IconName } from "../Icons";
+import { AppBar, TabBar, type TabGroup } from "../AppNav";
+import { Icon } from "../Icons";
 import { Button } from "./chrome";
 import { BookingsTable } from "./BookingsTable";
 import { ConflictsPanel } from "./ConflictsPanel";
@@ -45,12 +46,22 @@ import { InstructorsPanel } from "./InstructorsPanel";
  * Excel file becomes an export rather than the system of record.
  */
 
-const TABS: { id: string; label: string; icon: IconName }[] = [
-  { id: "schedule", label: "Daily schedule", icon: "calendar-check" },
-  { id: "register", label: "Bookings", icon: "table" },
-  { id: "instructors", label: "Instructors & leave", icon: "people" },
-  { id: "plan", label: "Plan check", icon: "shield" },
-  { id: "import", label: "Import / export", icon: "upload" },
+/**
+ * Three groups: the day you are running, the record behind it, and the checks
+ * over both. Import sits with the record because that is where the register
+ * comes from and goes back to.
+ */
+const TAB_GROUPS: TabGroup<string>[] = [
+  { label: "Today", tabs: [{ id: "schedule", label: "Daily schedule", icon: "calendar-check" }] },
+  {
+    label: "The record",
+    tabs: [
+      { id: "register", label: "Bookings", icon: "table" },
+      { id: "instructors", label: "Instructors & leave", icon: "people" },
+      { id: "import", label: "Import / export", icon: "upload" },
+    ],
+  },
+  { label: "Checks", tabs: [{ id: "plan", label: "Plan check", icon: "shield" }] },
 ];
 
 const monthWindow = (d: Date): PlanWindow => ({
@@ -209,56 +220,11 @@ export function BookingPlatform() {
     <div className="min-h-screen [--nav-h:64px]">
       {/* The sheet view is printed to make the morning's PDF, so the app's own
           chrome stays off the page. */}
+      {/* The sheet view is printed to make the morning's PDF, so the app's own
+          chrome stays off the page. */}
       <header className="no-print sticky top-0 z-30 border-b border-hairline bg-white">
-        <div className="flex h-(--nav-h) flex-wrap items-center gap-3 px-4">
-          <img src={BRAND.logo} alt="NEFT Energies" className="h-9 w-auto shrink-0" />
-          <span className="text-base font-bold tracking-tight text-navy sm:text-lg">
-            Booking &amp; Scheduling
-          </span>
-          <nav className="no-print ml-auto flex flex-wrap items-center gap-0.5">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                aria-current={tab === t.id ? "page" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-[color,background-color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  tab === t.id
-                    ? "bg-navy text-white"
-                    : "text-slate-ink hover:bg-navy-050 hover:text-navy"
-                }`}
-              >
-                <Icon name={t.icon} size={15} />
-                <span className="hidden lg:inline">{t.label}</span>
-                {t.id === "plan" && errorCount > 0 && (
-                  <span className="rounded-full bg-gold px-1.5 text-[11px] font-bold text-navy">
-                    {errorCount}
-                  </span>
-                )}
-              </button>
-            ))}
-            {/* Only the booking platform is hosted in the standalone build,
-                so the link back to the dashboard would go nowhere. */}
-            {HAS_DASHBOARD && (
-              <a
-                href="/incentives"
-                className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
-              >
-                <Icon name="check-circle" size={15} />
-                <span className="hidden lg:inline">Incentive Verification</span>
-              </a>
-            )}
-            {HAS_DASHBOARD && (
-              <a
-                href="/"
-                className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
-              >
-                <Icon name="gauge" size={15} />
-                <span className="hidden lg:inline">Dashboard</span>
-              </a>
-            )}
-          </nav>
-        </div>
+        <AppBar current="bookings" title="Booking & Scheduling" />
+        <TabBar groups={TAB_GROUPS} active={tab} onSelect={setTab} badges={{ plan: errorCount }} />
       </header>
 
       <main className="mx-auto max-w-[1500px] px-4 py-5">
