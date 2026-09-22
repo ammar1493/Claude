@@ -205,8 +205,7 @@ export function IncentiveVerifier() {
     const rec = parsedRecord.value;
     const cat = parsedCourses.value;
     if (!rec || !cat) return [];
-    const isFreelance = (name: string) =>
-      freelancers.some((f) => siteKey(f) === siteKey(name));
+    const isFreelance = (name: string) => freelancers.some((f) => siteKey(f) === siteKey(name));
     const out = parsedSheets.parsed.map((sheet) => {
       const first = verifySheet(sheet, rec, cat, { sites: siteTable, timecards });
       // The record sheet's spelling of the name is the one the office ticks
@@ -355,16 +354,15 @@ export function IncentiveVerifier() {
 
   const setExclusion = useCallback((name: string, exclude: boolean) => {
     setExcluded((prev) => {
-      const next = exclude
-        ? [...new Set([...prev, name])].sort()
-        : prev.filter((n) => n !== name);
+      const next = exclude ? [...new Set([...prev, name])].sort() : prev.filter((n) => n !== name);
       void putSetting("incentive:excluded", next);
       return next;
     });
   }, []);
 
   const unpricedSites = useMemo(
-    () => siteUsage.filter((u) => bandForSite(sites.find((s) => siteKey(s.name) === u.key)) === null),
+    () =>
+      siteUsage.filter((u) => bandForSite(sites.find((s) => siteKey(s.name) === u.key)) === null),
     [siteUsage, sites],
   );
 
@@ -410,29 +408,26 @@ export function IncentiveVerifier() {
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }, []);
 
-  const acceptReference = useCallback(
-    async (kind: "record" | "courses", files: File[]) => {
-      const file = files[0];
-      if (!file) return;
-      setError(null);
-      setBusy(kind);
-      try {
-        const data = await readFile(file);
-        // Parse before storing, so a wrong file is refused rather than kept.
-        if (kind === "record") parseRecordSheet(data);
-        else parseCourseCatalog(data);
-        await putWorkbook({ id: kind, name: file.name, kind, savedAt: Date.now(), data });
-        const next = { name: file.name, data };
-        if (kind === "record") setRecord(next);
-        else setCourses(next);
-      } catch (e) {
-        setError(`${file.name}: ${(e as Error).message}`);
-      } finally {
-        setBusy(null);
-      }
-    },
-    [],
-  );
+  const acceptReference = useCallback(async (kind: "record" | "courses", files: File[]) => {
+    const file = files[0];
+    if (!file) return;
+    setError(null);
+    setBusy(kind);
+    try {
+      const data = await readFile(file);
+      // Parse before storing, so a wrong file is refused rather than kept.
+      if (kind === "record") parseRecordSheet(data);
+      else parseCourseCatalog(data);
+      await putWorkbook({ id: kind, name: file.name, kind, savedAt: Date.now(), data });
+      const next = { name: file.name, data };
+      if (kind === "record") setRecord(next);
+      else setCourses(next);
+    } catch (e) {
+      setError(`${file.name}: ${(e as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }, []);
 
   const acceptLetterTemplate = useCallback(async (files: File[]) => {
     const file = files[0];
@@ -521,7 +516,12 @@ export function IncentiveVerifier() {
   const monthLabel = parsedRecord.value?.monthLabel ?? "";
 
   const accepted = useMemo(
-    () => new Set(Object.entries(decisions).filter(([, d]) => d === "accepted").map(([id]) => id)),
+    () =>
+      new Set(
+        Object.entries(decisions)
+          .filter(([, d]) => d === "accepted")
+          .map(([id]) => id),
+      ),
     [decisions],
   );
 
@@ -672,7 +672,12 @@ export function IncentiveVerifier() {
               <>
                 <button
                   type="button"
-                  onClick={() => void downloadFindingsWorkbook(reports, monthLabel || "report", { sites, timecards })}
+                  onClick={() =>
+                    void downloadFindingsWorkbook(reports, monthLabel || "report", {
+                      sites,
+                      timecards,
+                    })
+                  }
                   className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-bold text-navy transition-[filter,scale] duration-150 ease-out hover:brightness-105 active:scale-[0.96]"
                 >
                   <Icon name="download" size={14} />
@@ -688,7 +693,7 @@ export function IncentiveVerifier() {
                   <Icon name="document" size={14} />
                   Before / after
                 </button>
-                {(
+                {
                   <button
                     type="button"
                     onClick={() => void makeLetter()}
@@ -708,7 +713,7 @@ export function IncentiveVerifier() {
                       </span>
                     )}
                   </button>
-                )}
+                }
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -719,16 +724,25 @@ export function IncentiveVerifier() {
                 </button>
               </>
             )}
-            {/* Only the verifier is hosted in the standalone build, so the
-                link back to the dashboard would go nowhere. */}
+            {/* Only the verifier is hosted in the standalone build, so links
+                to the rest of the app would go nowhere. */}
             {HAS_DASHBOARD && (
-              <a
-                href="/"
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
-              >
-                <Icon name="gauge" size={14} />
-                Dashboard
-              </a>
+              <>
+                <a
+                  href="/bookings"
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
+                >
+                  <Icon name="calendar-check" size={14} />
+                  Booking &amp; Scheduling
+                </a>
+                <a
+                  href="/"
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
+                >
+                  <Icon name="gauge" size={14} />
+                  Dashboard
+                </a>
+              </>
             )}
           </nav>
         </div>
@@ -765,7 +779,8 @@ export function IncentiveVerifier() {
                 <span className="font-bold text-navy">{record?.name}</span>
                 <br />
                 {parsedRecord.value.rows.length.toLocaleString("en-US")} certificates ·{" "}
-                {parsedRecord.value.instructors.length} instructors · {parsedRecord.value.monthLabel}
+                {parsedRecord.value.instructors.length} instructors ·{" "}
+                {parsedRecord.value.monthLabel}
               </p>
             )}
           </FileSlot>
@@ -848,11 +863,11 @@ export function IncentiveVerifier() {
               </div>
               <h2 className="text-xl font-bold text-navy">Check a month of incentive sheets</h2>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-slate-ink">
-                Load the record sheet and the course duration list above, then drop in the trainers&apos;
-                incentive sheets. Every claimed day is matched to the sessions that instructor actually
-                delivered, and valued at the duration the course list gives the course — a half-day
-                course claimed as a full day comes back marked, with the wording to send to the
-                trainer. Nothing leaves this browser.
+                Load the record sheet and the course duration list above, then drop in the
+                trainers&apos; incentive sheets. Every claimed day is matched to the sessions that
+                instructor actually delivered, and valued at the duration the course list gives the
+                course — a half-day course claimed as a full day comes back marked, with the wording
+                to send to the trainer. Nothing leaves this browser.
               </p>
             </div>
           </Card>
@@ -878,7 +893,9 @@ export function IncentiveVerifier() {
                 onClick={() => setActive(ALL_SHEETS)}
                 aria-current={active === ALL_SHEETS ? "page" : undefined}
                 className={`rounded-md px-3 py-1.5 text-[13px] font-bold transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === ALL_SHEETS ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                  active === ALL_SHEETS
+                    ? "bg-navy text-white"
+                    : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
                 All {reports.length} sheet{reports.length === 1 ? "" : "s"}
@@ -888,7 +905,9 @@ export function IncentiveVerifier() {
                 onClick={() => setActive(SITES_TAB)}
                 aria-current={active === SITES_TAB ? "page" : undefined}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === SITES_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                  active === SITES_TAB
+                    ? "bg-navy text-white"
+                    : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
                 <Icon name="building" size={14} />
@@ -908,7 +927,9 @@ export function IncentiveVerifier() {
                 onClick={() => setActive(TIMECARDS_TAB)}
                 aria-current={active === TIMECARDS_TAB ? "page" : undefined}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === TIMECARDS_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                  active === TIMECARDS_TAB
+                    ? "bg-navy text-white"
+                    : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
                 <Icon name="calendar-check" size={14} />
@@ -928,7 +949,9 @@ export function IncentiveVerifier() {
                 onClick={() => setActive(MISSING_TAB)}
                 aria-current={active === MISSING_TAB ? "page" : undefined}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 ease-out active:scale-[0.96] ${
-                  active === MISSING_TAB ? "bg-navy text-white" : "bg-white text-slate-ink hover:text-navy"
+                  active === MISSING_TAB
+                    ? "bg-navy text-white"
+                    : "bg-white text-slate-ink hover:text-navy"
                 }`}
               >
                 <Icon name="people" size={14} />
@@ -1084,8 +1107,7 @@ function SummaryTable({
 }) {
   const difference = totals.verified - totals.claimed;
   const who = (r: SheetReport) => r.matchedInstructor ?? r.sheet.instructorName;
-  const isFreelance = (r: SheetReport) =>
-    freelancers.some((f) => siteKey(f) === siteKey(who(r)));
+  const isFreelance = (r: SheetReport) => freelancers.some((f) => siteKey(f) === siteKey(who(r)));
   return (
     <div className="space-y-4">
       {letterReady && (
@@ -1147,8 +1169,8 @@ function SummaryTable({
           <Icon name="warning" size={16} className="shrink-0 text-gold" />
           <span className="min-w-0 flex-1">
             {unpricedSites} location{unpricedSites === 1 ? "" : "s"} in this month{"’"}s sheets{" "}
-            {unpricedSites === 1 ? "has" : "have"} no distance set, so the days spent there cannot be
-            priced against a rate band yet.
+            {unpricedSites === 1 ? "has" : "have"} no distance set, so the days spent there cannot
+            be priced against a rate band yet.
           </span>
           <button
             type="button"
@@ -1171,7 +1193,9 @@ function SummaryTable({
           },
         ].map((f) => (
           <div key={f.label} className="surface-card print-block rounded-xl bg-white px-4 py-3">
-            <p className="text-[11px] font-bold tracking-wide text-slate-ink uppercase">{f.label}</p>
+            <p className="text-[11px] font-bold tracking-wide text-slate-ink uppercase">
+              {f.label}
+            </p>
             <p className={`mt-0.5 text-2xl leading-tight font-black tabular-nums ${f.tone}`}>
               {f.value}
             </p>
@@ -1224,9 +1248,7 @@ function SummaryTable({
               min={0}
               step="0.01"
               value={rates.sarPerUsd}
-              onChange={(e) =>
-                onRates({ ...rates, sarPerUsd: Number(e.target.value) || 0 })
-              }
+              onChange={(e) => onRates({ ...rates, sarPerUsd: Number(e.target.value) || 0 })}
               className="w-20 rounded-md border border-hairline bg-white px-2 py-1 text-right text-xs tabular-nums text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
             />
           </label>
@@ -1266,7 +1288,9 @@ function SummaryTable({
                     >
                       {r.matchedInstructor ?? r.sheet.instructorName}
                       {!r.matchedInstructor && (
-                        <span className={`ms-2 rounded px-1.5 py-0.5 text-[10px] ${SEVERITY.warning.chip}`}>
+                        <span
+                          className={`ms-2 rounded px-1.5 py-0.5 text-[10px] ${SEVERITY.warning.chip}`}
+                        >
                           not in record sheet
                         </span>
                       )}
@@ -1331,7 +1355,9 @@ function SummaryTable({
                     </td>
                     <td className="border-b border-hairline px-2 py-2 text-center">
                       {r.errorCount > 0 ? (
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-bold ${SEVERITY.error.chip}`}>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-xs font-bold ${SEVERITY.error.chip}`}
+                        >
                           {r.errorCount}
                         </span>
                       ) : (
@@ -1340,7 +1366,9 @@ function SummaryTable({
                     </td>
                     <td className="border-b border-hairline px-2 py-2 text-center text-xs">
                       {open > 0 ? (
-                        <span className={`rounded px-1.5 py-0.5 font-bold ${SEVERITY.warning.chip}`}>
+                        <span
+                          className={`rounded px-1.5 py-0.5 font-bold ${SEVERITY.warning.chip}`}
+                        >
                           {open}
                         </span>
                       ) : (

@@ -241,6 +241,15 @@ export function BookingPlatform() {
                 so the link back to the dashboard would go nowhere. */}
             {HAS_DASHBOARD && (
               <a
+                href="/incentives"
+                className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
+              >
+                <Icon name="check-circle" size={15} />
+                <span className="hidden lg:inline">Incentive Verification</span>
+              </a>
+            )}
+            {HAS_DASHBOARD && (
+              <a
                 href="/"
                 className="ms-1 flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[13px] font-medium text-slate-ink transition-[color,background-color,scale] duration-150 ease-out hover:bg-navy-050 hover:text-navy active:scale-[0.96]"
               >
