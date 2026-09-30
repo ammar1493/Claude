@@ -15,7 +15,7 @@ import { LANGUAGE_LABEL, type Instructor, type Leave } from "@/lib/bookings/type
 import { downloadDailySheet } from "@/lib/bookings/export";
 import { Card, SectionTitle } from "../Card";
 import { Icon } from "../Icons";
-import { Button, Empty, StatusChip, controlClass, isWeekend, weekdayName } from "./chrome";
+import { Button, Empty, StatusChip, controlClass, isWeekend, plural, weekdayName } from "./chrome";
 import { DailySheet } from "./DailySheet";
 
 /**
@@ -127,7 +127,7 @@ export function DaySchedule({
     }
     onApply(result.assignments);
     const short = result.unfilled.length ? `, ${result.unfilled.length} left open` : "";
-    onNotice(`Filled ${result.filled} booking(s) for ${label}${short}.`);
+    onNotice(`Filled ${plural(result.filled, "booking")} for ${label}${short}.`);
   };
 
   return (
@@ -191,7 +191,7 @@ export function DaySchedule({
                   const { rows } = await downloadDailySheet(classes, instructors, day);
                   onNotice(
                     rows
-                      ? `Daily schedule for ${day} exported — ${rows} class(es).`
+                      ? `Daily schedule for ${day} exported — ${plural(rows, "class", "classes")}.`
                       : "Nothing is running on this day, so there is no sheet to send.",
                   );
                 })();

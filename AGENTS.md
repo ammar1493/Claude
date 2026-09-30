@@ -143,9 +143,16 @@ never decides a rate band — `Location` does.
 
 The `/bookings` register is its own record and its own IndexedDB keys, like the
 verifier — the dashboard's training workbook is what was delivered and this is
-what is still to come. The workbook is uploaded once; a second import merges,
-adding only bookings the register has never seen, because a status or an
-instructor set in the app is worth more than the sheet's guess at it.
+what is still to come. There is no server behind any of it. A second import
+merges, adding only bookings the register has never seen, because a status or
+an instructor set in the app is worth more than the sheet's guess at it.
+
+The import is a way in, never a gate: every tab works on an empty register and
+a booking typed in from nothing must carry the same weight as an imported one.
+The office expects to stop keeping the sheet, so do not reintroduce anything
+that makes it compulsory. The course list the new-booking form offers is the
+catalogue plus the courses already in the register, which is what keeps it
+useful once no sheet arrives.
 
 A booking is one company's group on one delivery; a class is the delivery
 itself, whoever is paying. POs and confirmations are per booking, instructors

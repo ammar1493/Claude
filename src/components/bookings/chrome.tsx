@@ -52,6 +52,17 @@ export function PoChip({ status }: { status: PoStatus }) {
   );
 }
 
+/**
+ * "1 booking", "2 bookings", "1 class", "2 classes".
+ *
+ * A register that has just been started reads its own counts back at one for a
+ * while, and "1 booking(s)" is the sort of thing that makes a tool look like a
+ * draft. The plural is the singular plus "s" unless it is given.
+ */
+export function plural(n: number, one: string, many = one + "s"): string {
+  return `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+}
+
 export const controlClass =
   "rounded-md border border-hairline bg-white px-2.5 py-1.5 text-sm text-navy outline-none transition-[border-color,box-shadow] duration-150 focus:border-gold focus:ring-2 focus:ring-gold/25";
 

@@ -29,10 +29,11 @@ import {
 import type { Booking, CourseRef, Instructor, Leave } from "@/lib/bookings/types";
 import { AppBar, TabBar, type TabGroup } from "../AppNav";
 import { Icon } from "../Icons";
-import { Button } from "./chrome";
+import { Button, plural } from "./chrome";
 import { BookingsTable } from "./BookingsTable";
 import { ConflictsPanel } from "./ConflictsPanel";
 import { DaySchedule } from "./DaySchedule";
+import { EmptyRegister } from "./EmptyRegister";
 import { ImportPanel } from "./ImportPanel";
 import { InstructorsPanel } from "./InstructorsPanel";
 
@@ -79,6 +80,9 @@ export function BookingPlatform() {
   const [tab, setTab] = useState("schedule");
   const [notice, setNotice] = useState<string | null>(null);
   const [month, setMonth] = useState(() => floorMonth(new Date()));
+  /* Bumped to ask the register to open its new-booking form; a counter rather
+     than a flag so asking twice in a row works. */
+  const [newBooking, setNewBooking] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -124,6 +128,22 @@ export function BookingPlatform() {
     [classes, instructors, leaves, window_],
   );
   const errorCount = conflicts.filter((c) => c.severity === "error").length;
+
+  /*
+   * The courses on offer: the catalogue the CODE tab supplied, plus every
+   * course already in the register. Without that second half an office that
+   * never imports a sheet would type every course name from memory, and a
+   * spelling that drifts is a course the schedule treats as a different one.
+   */
+  const courseChoices = useMemo(() => {
+    const byName = new Map(courses.map((c) => [c.name.toUpperCase(), c]));
+    for (const b of bookings) {
+      const key = b.courseName.toUpperCase().trim();
+      if (!key || byName.has(key)) continue;
+      byName.set(key, { name: b.courseName.trim(), code: b.courseCode, location: b.venue });
+    }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [courses, bookings]);
 
   const patchBooking = useCallback((id: string, patch: Partial<Booking>) => {
     setBookings((prev) =>
@@ -212,6 +232,19 @@ export function BookingPlatform() {
     return () => window.clearTimeout(id);
   }, [notice]);
 
+  /* What the register actually covers, rather than what the last import did:
+     a booking typed in for next March has to widen it. */
+  const span = useMemo(() => {
+    if (!bookings.length) return null;
+    let from = bookings[0].startDate;
+    let to = bookings[0].endDate;
+    for (const b of bookings) {
+      if (b.startDate < from) from = b.startDate;
+      if (b.endDate > to) to = b.endDate;
+    }
+    return { from, to };
+  }, [bookings]);
+
   const totalTrainees = useMemo(
     () => bookings.reduce((n, b) => n + (b.status === "cancelled" ? 0 : b.participants.length), 0),
     [bookings],
@@ -235,18 +268,17 @@ export function BookingPlatform() {
         <div className="no-print surface-card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-white px-4 py-3 text-sm">
           <span className="flex items-center gap-2 font-bold text-navy">
             <Icon name="calendar" size={16} />
-            {meta ? meta.fileName : "No booking sheet imported yet"}
+            {/* A register built by hand has no file behind it and should not
+                be described as a missing one. */}
+            {meta ? meta.fileName : bookings.length ? "Booking register" : "The register is empty"}
           </span>
           <span className="text-slate-ink">
-            <strong className="text-navy">{bookings.length.toLocaleString("en-US")}</strong>{" "}
-            bookings ·{" "}
-            <strong className="text-navy">{totalTrainees.toLocaleString("en-US")}</strong> trainees
-            · <strong className="text-navy">{classes.length.toLocaleString("en-US")}</strong>{" "}
-            classes
+            {plural(bookings.length, "booking")} · {plural(totalTrainees, "trainee")} ·{" "}
+            {plural(classes.length, "class", "classes")}
           </span>
-          {meta?.firstDate && (
+          {span && (
             <span className="text-slate-ink">
-              covering {meta.firstDate} to {meta.lastDate}
+              covering {span.from} to {span.to}
             </span>
           )}
           <span className="ms-auto flex items-center gap-2">
@@ -281,17 +313,17 @@ export function BookingPlatform() {
           <p className="rounded-xl bg-white px-4 py-8 text-center text-sm text-slate-ink">
             Opening the register…
           </p>
-        ) : !bookings.length && tab !== "import" ? (
-          <ImportPanel
-            meta={meta}
-            bookingCount={0}
-            onExportAll={() => void exportRegister("all")}
-            onImport={importWorkbook}
-            onClear={clearRegister}
-            onNotice={setNotice}
-          />
         ) : (
           <>
+            {!bookings.length && tab !== "import" && (
+              <EmptyRegister
+                onAddBooking={() => {
+                  setTab("register");
+                  setNewBooking((n) => n + 1);
+                }}
+                onImport={() => setTab("import")}
+              />
+            )}
             {tab === "schedule" && (
               <DaySchedule
                 classes={classes}
@@ -308,7 +340,8 @@ export function BookingPlatform() {
               <BookingsTable
                 bookings={bookings}
                 instructors={instructors}
-                courses={courses}
+                courses={courseChoices}
+                openNewBooking={newBooking}
                 window={window_}
                 onPatch={patchBooking}
                 onAdd={addBooking}
@@ -321,7 +354,7 @@ export function BookingPlatform() {
                 instructors={instructors}
                 leaves={leaves}
                 classes={classes}
-                courses={courses}
+                courses={courseChoices}
                 window={window_}
                 onInstructors={setInstructors}
                 onLeaves={setLeaves}

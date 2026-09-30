@@ -14,7 +14,7 @@ import {
 } from "@/lib/bookings/types";
 import { Card, SectionTitle } from "../Card";
 import { Icon } from "../Icons";
-import { Button, Empty, Labelled, controlClass, isWeekend } from "./chrome";
+import { Button, Empty, Labelled, controlClass, isWeekend, plural } from "./chrome";
 
 /**
  * Who can teach, and when they are away.
@@ -122,7 +122,7 @@ export function InstructorsPanel({
     setBulk("");
     onNotice(
       added.length
-        ? `Added ${added.length} instructor(s). They are approved for everything until you narrow it.`
+        ? `Added ${plural(added.length, "instructor")}. They are approved for everything until you narrow it.`
         : "Those names are already on the roster.",
     );
   };
@@ -139,7 +139,7 @@ export function InstructorsPanel({
     onLeaves([...leaves, { ...leaveDraft, id: newId("lv") }]);
     onNotice(
       clash.length
-        ? `Leave saved — but it covers ${clash.length} class(es) already assigned. See Plan check.`
+        ? `Leave saved — but it covers ${plural(clash.length, "class", "classes")} already assigned. See Plan check.`
         : "Leave saved.",
     );
   };
@@ -169,14 +169,14 @@ export function InstructorsPanel({
                       {i.name}
                     </button>
                     <span className="text-xs text-slate-ink">
-                      {i.courses.length ? `${i.courses.length} course(s)` : "any course"} ·{" "}
+                      {i.courses.length ? plural(i.courses.length, "course") : "any course"} ·{" "}
                       {i.languages.length
                         ? i.languages.map((l) => LANGUAGE_LABEL[l]).join(", ")
                         : "any language"}
                     </span>
                     <span className="ms-auto flex items-center gap-2">
                       <span className="rounded-full bg-navy-050 px-2 py-0.5 text-[11px] font-bold text-navy">
-                        {load.get(i.id) ?? 0} day(s) this month
+                        {plural(load.get(i.id) ?? 0, "day")} this month
                       </span>
                       <label className="flex items-center gap-1 text-xs text-slate-ink">
                         <input
@@ -470,7 +470,7 @@ export function InstructorsPanel({
                       <strong className="text-navy">{who?.name ?? "(removed)"}</strong>
                       <span className="text-slate-ink">
                         {LEAVE_LABEL[l.kind]} · {l.from} to {l.to} ·{" "}
-                        {datesBetween(l.from, l.to).length} day(s)
+                        {plural(datesBetween(l.from, l.to).length, "day")}
                         {l.note ? ` · ${l.note}` : ""}
                       </span>
                       {clash && (

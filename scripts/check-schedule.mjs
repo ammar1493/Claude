@@ -100,6 +100,19 @@ is("a missing PO is a warning",
   codes([bk({ instructorId: "i1", poStatus: "not-received", poNumber: "" })], [ins({})]),
   ["warning:po-missing"]);
 
+// A register that was never imported is a first-class register: a booking
+// typed in from nothing schedules, assigns and prints like any other.
+{
+  const typed = bk({ courseName: "H2S", instructorId: "i1", room: "5", ref: "NB-0001" });
+  const cls = buildClasses([typed]);
+  is("a hand-typed booking makes a class", cls.length, 1);
+  is("and it can be filled", autoAssign(buildClasses([bk({})]), [ins({})], [], W).filled, 1);
+  is("and it reaches the sheet that gets emailed",
+    dailySheetLines(cls, [ins({})], "2026-10-05").map((l) => l && l.title), ["H2S ENGLISH"]);
+  is("with nothing in it at all, there is simply no day",
+    dailySheetLines(buildClasses([]), [ins({})], "2026-10-05").length, 0);
+}
+
 // The sheet that goes out by email: nine columns, blocked by the hour and the
 // kind of delivery, with the day of a multi-day course spelled out.
 {

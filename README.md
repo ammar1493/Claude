@@ -286,9 +286,17 @@ that sheet cannot say who is teaching, whether the customer has actually
 confirmed, or whether the purchase order is in. So the daily plan is made by
 eye and a clash is found on the morning it happens.
 
-The workbook is uploaded **once**. After that the register lives in the app:
-new bookings are typed in, statuses are set, the schedule is built, and the
-Excel file becomes an export rather than the system of record.
+The workbook is uploaded **once** — or never. The import is a way in, not a
+requirement: an office with a sheet brings a year of work across in one go, and
+an office without one types its first booking in and works entirely in the
+platform. Either way the register then lives in the app, and the Excel file is
+an export rather than the system of record.
+
+Every tab works on an empty register. The course list offered by the
+new-booking form is the CODE tab's catalogue **plus every course already in the
+register**, so it keeps itself up to date without a sheet behind it — which is
+what stops a course name drifting into two spellings the schedule treats as two
+different courses.
 
 ### What one booking is
 
@@ -487,6 +495,19 @@ by what it asks of you:
 The rules are asserted against worked examples in `scripts/check-schedule.mjs`
 (`npm run check:schedule`) rather than only described here — change a rule and
 you change a case and say why.
+
+### There is no server
+
+The whole platform runs in the browser. The register, the roster, the leave and
+the classrooms are in that browser's IndexedDB and nothing is ever sent
+anywhere — the app has API routes, but they serve the dashboard's workbooks and
+know nothing about bookings.
+
+That is what makes it private and what limits it. One browser on one machine
+holds the record: a second coordinator sees nothing, the register is empty on a
+different computer, and clearing browsing data erases it. **Export every
+booking** is the only backup. An office that needs more than one person in the
+register at once needs a server behind it, which is a different piece of work.
 
 ### Export
 

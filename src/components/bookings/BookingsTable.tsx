@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toISODate } from "@/lib/dates";
 import { fmtClock } from "@/lib/bookings/parse";
 import type { PlanWindow } from "@/lib/bookings/schedule";
@@ -17,7 +17,7 @@ import { Card, SectionTitle } from "../Card";
 import { DataTable, type Column } from "../DataTable";
 import { Icon } from "../Icons";
 import { BookingEditor } from "./BookingEditor";
-import { Button, PoChip, StatusChip, controlClass } from "./chrome";
+import { Button, PoChip, StatusChip, controlClass, plural } from "./chrome";
 
 /**
  * The register.
@@ -35,6 +35,7 @@ export function BookingsTable({
   instructors,
   courses,
   window: planWindow,
+  openNewBooking,
   onPatch,
   onAdd,
   onRemove,
@@ -44,6 +45,8 @@ export function BookingsTable({
   instructors: Instructor[];
   courses: CourseRef[];
   window: PlanWindow;
+  /** Bumped by the shell to open the new-booking form from elsewhere. */
+  openNewBooking?: number;
   onPatch: (id: string, patch: Partial<Booking>) => void;
   onAdd: (booking: Booking) => void;
   onRemove: (id: string) => void;
@@ -56,6 +59,13 @@ export function BookingsTable({
   const [adding, setAdding] = useState(false);
 
   const names = useMemo(() => new Map(instructors.map((i) => [i.id, i.name])), [instructors]);
+
+  // Opened from the empty-register signpost on another tab.
+  useEffect(() => {
+    if (!openNewBooking) return;
+    setEditing(null);
+    setAdding(true);
+  }, [openNewBooking]);
 
   /* A booking typed in continues the register's own numbering rather than
      starting a second scheme beside it. */
@@ -313,13 +323,17 @@ export function BookingsTable({
         />
       )}
 
-      <Card title={`${rows.length.toLocaleString("en-US")} booking(s)`} expandable={false} inset>
+      <Card title={plural(rows.length, "booking")} expandable={false} inset>
         <DataTable
           rows={rows}
           columns={columns}
           pageLength={25}
           dense
-          emptyMessage="Nothing matches these filters."
+          emptyMessage={
+            bookings.length
+              ? "Nothing matches these filters."
+              : "No bookings yet. Use New booking to add the first one."
+          }
         />
       </Card>
     </div>

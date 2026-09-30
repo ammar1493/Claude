@@ -21,7 +21,7 @@ import {
   type PoStatus,
 } from "@/lib/bookings/types";
 import { Card } from "../Card";
-import { Button, Labelled, controlClass } from "./chrome";
+import { Button, Labelled, controlClass, plural } from "./chrome";
 
 /**
  * Typing a booking in, which is the point of the whole thing: after the first
@@ -198,7 +198,9 @@ export function BookingEditor({
           />
         </Labelled>
         <Labelled
-          label={accredited ? `Last day — accredited at ${accredited.days} day(s)` : "Last day"}
+          label={
+            accredited ? `Last day — accredited at ${plural(accredited.days, "day")}` : "Last day"
+          }
         >
           <input
             type="date"
