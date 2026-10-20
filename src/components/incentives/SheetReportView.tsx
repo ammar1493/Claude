@@ -7,6 +7,7 @@ import type { Decision, Finding, Severity, SheetReport, SiteDistance } from "@/l
 import { Card, SectionTitle } from "../Card";
 import { Icon } from "../Icons";
 import { ClaimGrid } from "./ClaimGrid";
+import { RemoveButton } from "./RemoveButton";
 import { CorrectionPanel } from "./CorrectionPanel";
 import { DayLedger } from "./DayLedger";
 import { cssId, FindingsList } from "./FindingsList";
@@ -49,6 +50,7 @@ export function SheetReportView({
   onDecide,
   onDecideMany,
   onSetSite,
+  onRemove,
 }: {
   report: SheetReport;
   /** The uploaded workbook, so a corrected copy can be written from it. */
@@ -63,6 +65,8 @@ export function SheetReportView({
   onDecide: (id: string, decision: Decision) => void;
   onDecideMany: (ids: string[], decision: Decision) => void;
   onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
+  /** Take this sheet out of the month, from the page that shows it. */
+  onRemove: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<Set<Severity>>(new Set(SEVERITY_ORDER));
@@ -120,7 +124,15 @@ export function SheetReportView({
                 : ""}
             </p>
           </div>
-          <div className="no-print flex flex-wrap gap-1.5">
+          <div className="no-print flex flex-wrap items-center gap-1.5">
+            {/* Where the decision is actually made. A sheet that should not be
+                in the month is recognised while reading it, not from a list. */}
+            <RemoveButton
+              variant="labelled"
+              what={report.sheet.instructorName || report.sheet.fileName}
+              onRemove={onRemove}
+            />
+            <span aria-hidden className="mx-1 w-px self-stretch bg-hairline" />
             {SEVERITY_ORDER.map((s) => (
               <button
                 key={s}

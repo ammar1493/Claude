@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "../Icons";
 
 /**
@@ -18,6 +18,7 @@ export function FileSlot({
   busy,
   onFiles,
   onClear,
+  clearNoun = "this",
   children,
 }: {
   title: string;
@@ -29,10 +30,23 @@ export function FileSlot({
   busy?: boolean;
   onFiles: (files: File[]) => void;
   onClear?: () => void;
+  /** What Clear throws away, named in the confirmation. */
+  clearNoun?: string;
   children?: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
+  /*
+   * Clear throws away everything the slot holds, and on the sheets slot that
+   * is the whole month. It asks first, the same way removing one sheet does.
+   */
+  const [confirming, setConfirming] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const t = window.setTimeout(() => setConfirming(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [confirming]);
 
   return (
     <div
@@ -90,10 +104,22 @@ export function FileSlot({
         {loaded && onClear && (
           <button
             type="button"
-            onClick={onClear}
-            className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:text-navy"
+            onClick={() => {
+              if (!confirming) {
+                setConfirming(true);
+                return;
+              }
+              setConfirming(false);
+              onClear();
+            }}
+            onBlur={() => setConfirming(false)}
+            className={`rounded-md px-2 py-1.5 text-xs font-medium transition-colors duration-150 ${
+              confirming
+                ? "bg-[#B3261E] text-white"
+                : "text-slate-ink hover:text-navy"
+            }`}
           >
-            Clear
+            {confirming ? `Clear ${clearNoun} \u2014 sure?` : "Clear"}
           </button>
         )}
       </div>

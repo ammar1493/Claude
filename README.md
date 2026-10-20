@@ -267,6 +267,21 @@ fills, so the highlighting stays in the app and on **Print**). The two
 reference tables travel with the report because a verified figure is only as
 good as the distance it was priced at.
 
+**Taking a sheet out.** A sheet can be removed from the summary row or from
+the trainer's own page, which is where you are when you notice it should not
+be in the month. Both ask twice: removing throws the workbook out of the
+browser, the only copy left is whatever the trainer emailed, and the summary's
+button sits at the end of a row that opens the sheet when clicked. **Clear**
+on the upload slot asks the same way, naming how many sheets it is about to
+drop. The second press has about four seconds before the button goes back to
+sleep, so one left armed by a passing mouse is not waiting to catch the next
+click.
+
+Removing a sheet takes its rulings with it. A finding's id carries the file
+name, so decisions left behind would attach themselves to the next upload of
+the same file — somebody would re-add a sheet they had thrown away and find
+half of it already accepted, by a verifier who had meant to be rid of it.
+
 The three workbooks, both reference tables and the timecard scans are kept in
 IndexedDB, so the record sheet, the course list and the distances survive a
 reload and only the trainers' sheets change month to month. Nothing is sent to

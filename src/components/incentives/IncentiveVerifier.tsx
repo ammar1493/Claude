@@ -43,6 +43,7 @@ import { SectionLinks } from "../AppNav";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
 import { FileSlot } from "./FileSlot";
+import { RemoveButton } from "./RemoveButton";
 import { SEVERITY } from "./severity";
 import { SheetReportView } from "./SheetReportView";
 import { MissingSheetsPanel } from "./MissingSheetsPanel";
@@ -505,13 +506,30 @@ export function IncentiveVerifier() {
     const stored = await listWorkbooks("incentive");
     await Promise.all(stored.map((w) => deleteWorkbook(w.id)));
     setSheets([]);
-    setActive(-1);
+    setDecisions({});
+    void putSetting("incentive:decisions", {});
+    setActive(ALL_SHEETS);
   }, []);
 
   const removeSheet = useCallback(async (name: string) => {
     await deleteWorkbook(`incentive:${name}`);
     setSheets((prev) => prev.filter((s) => s.name !== name));
-    setActive(-1);
+    /*
+     * And the rulings made on it.
+     *
+     * A finding's id carries the file name, so decisions left behind would
+     * attach themselves to the next upload of the same file \u2014 someone would
+     * re-add a sheet they had removed and find half of it already accepted,
+     * by a verifier who had meant to throw the whole thing away.
+     */
+    setDecisions((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([id]) => !id.startsWith(`${name}|`)),
+      );
+      void putSetting("incentive:decisions", next);
+      return next;
+    });
+    setActive(ALL_SHEETS);
   }, []);
 
   const monthLabel = parsedRecord.value?.monthLabel ?? "";
@@ -802,6 +820,7 @@ export function IncentiveVerifier() {
             busy={busy === "sheets"}
             onFiles={(f) => void acceptSheets(f)}
             onClear={() => void clearSheets()}
+            clearNoun={`all ${sheets.length} sheet${sheets.length === 1 ? "" : "s"}`}
           >
             {sheets.length > 0 && (
               <p className="text-xs text-slate-ink">
@@ -1034,6 +1053,7 @@ export function IncentiveVerifier() {
                 onDecide={decide}
                 onDecideMany={decideMany}
                 onSetSite={setSite}
+                onRemove={() => void removeSheet(reports[active].sheet.fileName)}
               />
             )}
           </>
@@ -1360,17 +1380,10 @@ function SummaryTable({
                       )}
                     </td>
                     <td className="no-print border-b border-hairline px-2 py-2 text-right">
-                      <button
-                        type="button"
-                        aria-label={`Remove ${r.sheet.fileName}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemove(r.sheet.fileName);
-                        }}
-                        className="rounded p-1 text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
-                      >
-                        <Icon name="trash" size={14} />
-                      </button>
+                      <RemoveButton
+                        what={who(r) || r.sheet.fileName}
+                        onRemove={() => onRemove(r.sheet.fileName)}
+                      />
                     </td>
                   </tr>
                 );
