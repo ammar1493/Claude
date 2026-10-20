@@ -216,10 +216,26 @@ anything: **3.75 riyals to the dollar**, the peg, which makes $75 a day 281.25
 SAR. All three figures are editable above the table, the rate included, for a
 month the office settles at something else.
 
-Because it replaces the rate table rather than correcting it, a freelancer's
-figure is not the total their corrected workbook computes: that workbook is
-their own form, and the form pays staff rates. The letter and the report take
-the allowance; the workbook stays the trainer's sheet with the ticks put right.
+**The workbook says it too.** A freelancer's corrected and drafted sheets get
+the allowance written into the SAR column where the staff rate would sit —
+140.625 beside a half day, 281.25 beside a full one — and every row total and
+the grand total recomputed from it. The ticks are untouched: which days were
+worked, and whether each was a morning, an afternoon or a whole day, is a
+question about the month and not about how the person is engaged. A line under
+the total says where those rates came from, because otherwise a reader finds
+281.25 in a column the blank form prints 100 in with no way to tell the scheme
+from a typo.
+
+Per diems, the admin and office-boy lines and the special-project weeks keep
+the form's own figures: a hotel night costs what it costs whoever slept in it,
+and none of those lines is a teaching day. They are in the app's figure too,
+at the form's rates, so the sheet and the summary agree to the riyal.
+
+The sheet's own formulas are `SUM(B9:AF9)*AH9` down the rows and
+`SUM(AJ9:AJ53)` at the foot, so Excel recalculating on open reaches the same
+figures from the rates written in; the cached values and the live formulas do
+not disagree. Feeding a repriced sheet back through the verifier returns the
+same total with no findings.
 
 ### Colouring the days
 

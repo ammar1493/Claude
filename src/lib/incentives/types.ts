@@ -205,6 +205,12 @@ export interface ClaimRow {
   /** The row's own Total cell, as the sheet computed it. */
   statedTotal: number | null;
   totalCell: string;
+  /**
+   * The row's own SAR cell. A freelancer is not on the form's rate table, so
+   * their sheet has to say what their day is worth where the staff rate would
+   * otherwise sit.
+   */
+  rateCell: string;
 }
 
 /** One line of the trainer's self-declared verification log. */

@@ -70,6 +70,14 @@ $37.50 a half day) while every other figure in the app is in riyals, so
 dollars and the conversion both; anything that adds it to another figure uses
 the riyals.
 
+A freelancer's workbook carries their rates, not the form's: `freelance.ts`
+decides which rows are repriced (any row with `dayValue > 0`; per diems, admin,
+office boy and special projects keep the printed figures) and both writers
+rewrite `ClaimRow.rateCell` before recomputing the totals from it. `freelanceTotal`
+adds the non-day rows at the form's own rates for the same reason — the app's
+figure and the sheet's grand total have to agree to the riyal, and the sheet
+still carries those ticks.
+
 Freelancers are priced by `freelanceTotal`, which **replaces** the staff rate
 arithmetic rather than adjusting it — the finding carries no delta, and
 `verifiedTotal` and `payableTotal` return it directly. Adding a delta on top

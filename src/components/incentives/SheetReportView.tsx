@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildPlan } from "@/lib/incentives/correct";
 import { siteKey } from "@/lib/incentives/sites";
-import type { Decision, Finding, Severity, SheetReport, SiteDistance } from "@/lib/incentives/types";
+import type {
+  Decision,
+  Finding,
+  FreelanceRates,
+  Severity,
+  SheetReport,
+  SiteDistance,
+} from "@/lib/incentives/types";
 import { Card, SectionTitle } from "../Card";
 import { Icon } from "../Icons";
 import { ClaimGrid } from "./ClaimGrid";
@@ -51,6 +58,7 @@ export function SheetReportView({
   onDecideMany,
   onSetSite,
   onRemove,
+  freelanceRates,
 }: {
   report: SheetReport;
   /** The uploaded workbook, so a corrected copy can be written from it. */
@@ -67,6 +75,8 @@ export function SheetReportView({
   onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
   /** Take this sheet out of the month, from the page that shows it. */
   onRemove: () => void;
+  /** The allowance, for a trainer the office has marked a freelancer. */
+  freelanceRates: FreelanceRates;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<Set<Severity>>(new Set(SEVERITY_ORDER));
@@ -226,6 +236,7 @@ export function SheetReportView({
             plan={plan}
             original={original}
             onDecideMany={decideMany}
+            freelanceRates={freelanceRates}
           />
           <FindingsList
             report={report}

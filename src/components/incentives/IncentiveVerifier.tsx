@@ -309,6 +309,9 @@ export function IncentiveVerifier() {
             cat,
             siteTable,
             timecards,
+            // A trainer marked a freelancer before their sheet was drafted
+            // gets it drafted at their own rates, not the form's.
+            freelancers.some((f) => siteKey(f) === siteKey(name)) ? freelanceRates : null,
           ),
         );
       }
@@ -334,7 +337,17 @@ export function IncentiveVerifier() {
 
       return out;
     },
-    [parsedRecord.value, parsedCourses.value, template, templateName, sheets, siteTable, timecards],
+    [
+      parsedRecord.value,
+      parsedCourses.value,
+      template,
+      templateName,
+      sheets,
+      siteTable,
+      timecards,
+      freelancers,
+      freelanceRates,
+    ],
   );
 
   const decide = useCallback((id: string, decision: Decision) => {
@@ -1054,6 +1067,7 @@ export function IncentiveVerifier() {
                 onDecideMany={decideMany}
                 onSetSite={setSite}
                 onRemove={() => void removeSheet(reports[active].sheet.fileName)}
+                freelanceRates={freelanceRates}
               />
             )}
           </>

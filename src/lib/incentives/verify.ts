@@ -1722,7 +1722,18 @@ export function verifySheet(
     ).length;
     const usd = full * freelanceRates.day + halves * freelanceRates.half;
     const rate = freelanceRates.sarPerUsd || DEFAULT_FREELANCE_RATES.sarPerUsd;
-    const owed = usd * rate;
+    /*
+     * Per diems stay as claimed.
+     *
+     * The allowance replaces the day rates, not the allowances beside them: a
+     * hotel night costs what it costs whoever slept in it. Leaving them out
+     * would also put this figure at odds with the trainer's own sheet, which
+     * still carries those ticks at the form's own rates.
+     */
+    const allowances = sheet.rows
+      .filter((r) => r.dayValue <= 0)
+      .reduce((sum, r) => sum + r.days.filter((d) => d <= 31).length * r.rate, 0);
+    const owed = usd * rate + allowances;
     freelanceTotal = owed;
     findings.push(
       makeFinding({
@@ -1738,7 +1749,9 @@ export function verifySheet(
           `The month comes to ${full} full day${full === 1 ? "" : "s"} at ${usdExact(freelanceRates.day)}` +
           (halves ? ` and ${halves} half day${halves === 1 ? "" : "s"} at ${usdExact(freelanceRates.half)}` : "") +
           `, which is ${usdExact(usd)}. ` +
-          `Everything else here is in riyals, so at ${rate} to the dollar that is ${sarExact(owed)}, against the ${sar(computedTotal)} the ticks add up to at staff rates.`,
+          `Everything else here is in riyals, so at ${rate} to the dollar that is ${sarExact(usd * rate)}` +
+          (allowances > 0 ? `, plus ${sar(allowances)} of per diems claimed at the form's own rates` : "") +
+          ` \u2014 ${sarExact(owed)} against the ${sar(computedTotal)} the ticks add up to at staff rates.`,
         suggestion: `Pay ${sarExact(owed)} \u2014 ${usdExact(usd)} at the freelance teaching allowance.`,
         sheet: "timesheet",
         cells: [],

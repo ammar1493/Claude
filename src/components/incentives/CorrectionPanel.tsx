@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { buildCorrectedWorkbook, previewRows, type CorrectionPlan } from "@/lib/incentives/correct";
 import { saveFile } from "@/lib/incentives/download";
-import type { Decision, Finding, SheetReport } from "@/lib/incentives/types";
+import type { Decision, Finding, FreelanceRates, SheetReport } from "@/lib/incentives/types";
 import { Card } from "../Card";
 import { Icon } from "../Icons";
 import { SEVERITY } from "./severity";
@@ -25,6 +25,7 @@ export function CorrectionPanel({
   plan,
   original,
   onDecideMany,
+  freelanceRates,
 }: {
   report: SheetReport;
   decisions: Record<string, Decision>;
@@ -32,6 +33,8 @@ export function CorrectionPanel({
   plan: CorrectionPlan;
   original: ArrayBuffer | null;
   onDecideMany: (ids: string[], decision: Decision) => void;
+  /** The allowance, for a trainer the office has marked a freelancer. */
+  freelanceRates: FreelanceRates;
 }) {
   const [rebuildLog, setRebuildLog] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,7 +44,12 @@ export function CorrectionPanel({
 
   const acceptedCount = report.findings.filter((f) => decisions[f.id] === "accepted").length;
   const rows = useMemo(() => previewRows(report, plan), [report, plan]);
-  const newTotal = rows.reduce((s, r) => s + r.total, 0);
+  // What the corrected workbook will say, which for a freelancer is their
+  // allowance rather than the arithmetic of the form's own rate lines.
+  const newTotal =
+    report.freelanceTotal !== null
+      ? report.freelanceTotal
+      : rows.reduce((s, r) => s + r.total, 0);
 
   const undecided = report.findings.filter((f) => (decisions[f.id] ?? "pending") === "pending");
   const mustChange = report.findings.filter(
@@ -56,7 +64,12 @@ export function CorrectionPanel({
     setBusy(true);
     setError(null);
     try {
-      const out = await buildCorrectedWorkbook(original, report, plan, { rebuildLog });
+      const out = await buildCorrectedWorkbook(original, report, plan, {
+        rebuildLog,
+        // The report knows whether this trainer is on the allowance; the
+        // workbook has to say so too, or its totals are somebody else's.
+        freelance: report.freelanceTotal !== null ? freelanceRates : null,
+      });
       const blob = new Blob([out.data as BlobPart], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });

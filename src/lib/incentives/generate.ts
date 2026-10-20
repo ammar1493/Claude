@@ -1,4 +1,5 @@
 import { CourseCatalog } from "./courses";
+import { freelanceNote, freelanceSarRate } from "./freelance";
 import { highlightGrid, highlightLog } from "./highlight";
 import { logLinesForDay, type LogLine } from "./logLines";
 import { nameSimilarity } from "./names";
@@ -8,6 +9,7 @@ import { cardsFor, coverageFor, describeTimecard, siteForTimecard } from "./time
 import { claimCell, KIND_LABELS, SECTION_LABELS, targetKind } from "./timesheet";
 import type {
   ClaimSection,
+  FreelanceRates,
   IncentiveSheet,
   RecordDay,
   Timecard,
@@ -16,6 +18,7 @@ import type {
 import {
   StyleTable,
   entryText,
+  splitRef,
   forceRecalc,
   openWorkbook,
   saveWorkbook,
@@ -224,6 +227,8 @@ export async function buildGeneratedWorkbook(
   catalog: CourseCatalog,
   sites: SiteTable,
   timecards: Timecard[],
+  /** Set when this trainer is a freelancer, so the day lines are repriced. */
+  freelance?: FreelanceRates | null,
 ): Promise<GeneratedSheet> {
   const book = await openWorkbook(templateData);
   const timePath = book.sheetPaths.get(template.timeSheetName);
@@ -302,15 +307,34 @@ export async function buildGeneratedWorkbook(
     logLines.push(...logLinesForDay({ date, record: rec, covers }));
   }
 
+  /*
+   * A freelancer's own rates go in before the totals are added up, because
+   * the totals are the rates times the ticks and nothing else.
+   */
+  if (freelance) {
+    for (const row of template.rows) {
+      const sar = freelanceSarRate(row, freelance);
+      if (sar === null || !row.rateCell) continue;
+      put("grid", row.rateCell, sar);
+    }
+    notes.push(freelanceNote(freelance));
+  }
+
   /* Totals, from the ticks just written. */
   let total = 0;
   for (const row of template.rows) {
     const count = perRow.get(row.rowIndex) ?? 0;
-    const value = count * row.rate;
+    const rate = (freelance ? freelanceSarRate(row, freelance) : null) ?? row.rate;
+    const value = count * rate;
     total += value;
     if (row.totalCell) grid = setCachedValue(grid, row.totalCell, value);
   }
   if (template.grandTotalCell) grid = setCachedValue(grid, template.grandTotalCell, total);
+
+  if (freelance && template.grandTotalCell) {
+    const under = splitRef(template.grandTotalCell);
+    if (under) put("grid", `A${under.row + 1}`, freelanceNote(freelance));
+  }
 
   /* The verification log, written from the same evidence. */
   if (log && template.verificationLayout) {

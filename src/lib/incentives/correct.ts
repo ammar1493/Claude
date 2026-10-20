@@ -1,8 +1,9 @@
+import { freelanceNote, freelanceSarRate } from "./freelance";
 import { highlightGrid, highlightLog } from "./highlight";
 import { logLinesForDay, type LogLine } from "./logLines";
 import { describeTimecard } from "./timecards";
 import { claimCell, KIND_LABELS } from "./timesheet";
-import type { CellEdit, Finding, SheetReport } from "./types";
+import type { CellEdit, Finding, FreelanceRates, SheetReport } from "./types";
 import {
   StyleTable,
   forceRecalc,
@@ -124,6 +125,12 @@ export interface CorrectOptions {
    * actually hold, rather than only correcting the lines with findings.
    */
   rebuildLog: boolean;
+  /**
+   * Price the day lines at the freelance teaching allowance instead of the
+   * rate table printed on the form. Set when the office has marked this
+   * trainer a freelancer.
+   */
+  freelance?: FreelanceRates | null;
 }
 
 export interface CorrectionResult {
@@ -200,18 +207,52 @@ export async function buildCorrectedWorkbook(
 
   for (const edit of plan.edits) write(edit.sheet, edit.cell, edit.value, edit.describe);
 
-  /* Totals, from the ticks that survived. */
+  /*
+   * A freelancer's day rates, written where the staff rates were.
+   *
+   * The ticks are right either way \u2014 they say which days were worked and in
+   * what shape. It is the rate beside them that does not belong to this
+   * person, and every total below it that follows from the rate.
+   */
+  const rates = options.freelance ?? null;
+  if (rates && xml.timesheet) {
+    for (const row of sheet.rows) {
+      const sar = freelanceSarRate(row, rates);
+      if (sar === null || !row.rateCell) continue;
+      const outcome = setCell(xml.timesheet, row.rateCell, sar);
+      xml.timesheet = outcome.xml;
+      if (outcome.applied) {
+        applied.push(`${row.rateCell}: ${row.label} priced at ${sar} SAR (freelance).`);
+      } else {
+        skipped.push(outcome.skipped ?? `${row.rateCell} could not be repriced.`);
+      }
+    }
+  }
+
+  /* Totals, from the ticks that survived \u2014 at whichever rates now apply. */
   const rows = previewRows(report, plan);
   let grand = 0;
   for (const row of rows) {
-    grand += row.total;
     const target = sheet.rows.find((r) => r.rowIndex === row.rowIndex);
+    const sar = target && rates ? freelanceSarRate(target, rates) : null;
+    const total = sar === null ? row.total : row.days.length * sar;
+    grand += total;
     if (target?.totalCell && xml.timesheet) {
-      xml.timesheet = setCachedValue(xml.timesheet, target.totalCell, row.total);
+      xml.timesheet = setCachedValue(xml.timesheet, target.totalCell, total);
     }
   }
   if (sheet.grandTotalCell && xml.timesheet) {
     xml.timesheet = setCachedValue(xml.timesheet, sheet.grandTotalCell, grand);
+  }
+
+  /* And a line under the total saying where those rates came from. */
+  if (rates && xml.timesheet) {
+    const under = splitRef(sheet.grandTotalCell);
+    if (under) {
+      const outcome = setCell(xml.timesheet, `A${under.row + 1}`, freelanceNote(rates));
+      xml.timesheet = outcome.xml;
+      if (outcome.applied) applied.push("Noted the freelance allowance under the total.");
+    }
   }
 
   /* The verification log, rebuilt from the evidence if asked. */

@@ -304,6 +304,7 @@ function parseClaimRows(grid: Grid, layout: GridLayout): { rows: ClaimRow[]; gra
       cells,
       statedTotal: statedRaw === null || statedRaw === "" ? null : cellToNumber(statedRaw),
       totalCell: addr(row, layout.totalCol),
+      rateCell: layout.rateCol >= 0 ? addr(row, layout.rateCol) : "",
     });
   }
 
