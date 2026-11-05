@@ -52,7 +52,9 @@ third of the instructor-days in that file disagree with what counting session
 numbers would give. Do not "improve" it back to inferring.
 
 That export is the whole record, not one month (34 months in the file we were
-given), so `recordForMonth` narrows it and everything downstream keeps reading
+given), so `MonthPicker` chooses one — month and year as two selects, offering
+only the months the file holds, keeping the month when the year changes — and
+`recordForMonth` narrows it and everything downstream keeps reading
 `year` / `month` / `monthLabel` off the narrowed sheet as before. It carries
 five weeks of lead-in rows so multi-day courses that start in the previous
 month still resolve. Its dates are real Excel serials, so do not add dd/mm

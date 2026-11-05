@@ -219,8 +219,17 @@ two or three half days where one class ran.
 **The newer export is the whole record, not one month** — the file we were
 given runs from January 2024 to October 2026, 74,782 rows across 34 months.
 The month cannot be read off a file like that, so the record-sheet card offers
-it: pick one and the rest of the app is handed a record sheet that is about
-that month, which is how every downstream rule keeps working unchanged. The
+it as **a month and a year side by side** rather than one list of every month
+in the file: thirty-four entries in a dropdown is a scroll with no shape to
+it, and the office already thinks of a month as a month and a year. Only the
+months the file actually holds are offered — 2026 stops at October because
+the data does — since an empty month would verify every trainer as having
+taught nothing, which is a worse answer than not being able to ask. Changing
+the year keeps the month where that year has it, so stepping back to compare
+the same August does not also move you to December.
+
+Picking one hands the rest of the app a record sheet that is about that month,
+which is how every downstream rule keeps working unchanged. The
 rows of the five weeks before it come too, because a course that started on
 the 30th and runs four days is taught on the 1st and the 2nd, and dropping its
 only row would turn those into days nobody delivered. A single-month file

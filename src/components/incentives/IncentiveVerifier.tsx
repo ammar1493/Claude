@@ -51,6 +51,7 @@ import { RemoveButton } from "./RemoveButton";
 import { SEVERITY } from "./severity";
 import { SheetReportView } from "./SheetReportView";
 import { MissingSheetsPanel } from "./MissingSheetsPanel";
+import { MonthPicker } from "./MonthPicker";
 import { SitesPanel } from "./SitesPanel";
 import { TimecardsPanel } from "./TimecardsPanel";
 
@@ -684,9 +685,11 @@ export function IncentiveVerifier() {
     }
   }, [letterData, reports, payable, draftedNames, monthLabel]);
 
-  const saveMonth = useCallback((key: string) => {
+  const saveMonth = useCallback((year: number, month: number) => {
+    const key = `${year}-${month}`;
     setMonthKey(key);
     void putSetting("incentive:month", key);
+    // The tabs are the old month's trainers until the sheets re-verify.
     setActive(ALL_SHEETS);
   }, []);
 
@@ -841,23 +844,12 @@ export function IncentiveVerifier() {
                 {/* A whole-record export covers dozens of months, and the one
                     being checked cannot be read off the file. */}
                 {(wholeRecord.value?.months.length ?? 0) > 1 && (
-                  <label className="no-print mt-2 flex flex-wrap items-center gap-1.5 text-xs font-bold text-navy">
-                    Check
-                    <select
-                      value={`${parsedRecord.value.year}-${parsedRecord.value.month}`}
-                      onChange={(e) => saveMonth(e.target.value)}
-                      className="rounded-md border border-hairline bg-white px-2 py-1 text-xs font-medium text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
-                    >
-                      {wholeRecord.value?.months.map((m) => (
-                        <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                          {m.label} ({m.rows.toLocaleString("en-US")})
-                        </option>
-                      ))}
-                    </select>
-                    <span className="font-medium text-slate-ink">
-                      of {wholeRecord.value?.months.length} months in this file
-                    </span>
-                  </label>
+                  <MonthPicker
+                    months={wholeRecord.value?.months ?? []}
+                    year={parsedRecord.value.year}
+                    month={parsedRecord.value.month}
+                    onChange={saveMonth}
+                  />
                 )}
               </>
             )}
