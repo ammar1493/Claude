@@ -47,7 +47,7 @@ to four files, all in the browser:
 
 | File | What it is |
 | --- | --- |
-| Record sheet | The month's certificate export — `CertNo`, `StudentName`, `ClientName`, `InstructorName`, `PrintedCourseName`, `IssuedOn`, `Location`, `SessionNo`, `RigNo`. Evidence that a session ran. |
+| Record sheet | The certificate export — evidence that a session ran. Both layouts are read: the older `CertNo` / `StudentName` / `PrintedCourseName` / `IssuedOn` one, and the newer `Participant's Name` / `Course Name` / `Actual Date` / `Actual Sessions`, which carries no certificate number and is the whole record rather than one month. |
 | Courses Duration | `Course Name` / `Duration`, where duration is `Half Day`, `1 Full Day` or `N Days`. |
 | Incentive sheets | The trainers' workbooks — a `.zip` of them, or the `.xlsx` files. Each has a claim grid (rate lines down, days of the month across) and a verification log (one line per session). |
 | Incentives letter | Optional. The *Monthly Incentives — Instructors* letter is built in and its month is filled from the record sheet; upload one only to write on a different template. |
@@ -199,6 +199,37 @@ Feeding a generated sheet back through the verifier is the test that matters,
 and it is how the rules above were checked: ten of August's eleven come back
 with no errors at all, and so do all twelve of the drafted ones. The eleventh is Ahmed Abubakr, whose timecard and record
 sheet contradict each other — which is the one thing the tool will not decide.
+
+### Two record-sheet layouts, and choosing the month
+
+The export has been renamed at least once, so a sheet is matched on what it
+carries rather than on one fixed set of headings: four columns are required
+— who taught, what, when, and under which session — and each is looked up
+under every spelling it has arrived as. Requiring more would turn a renamed
+column into a workbook the app refuses to open.
+
+**`Actual Sessions` is the office's own grouping**, and where it is present
+the app stops inferring. The column rolls course, instructor and date into one
+key, which is exactly the question `groupSessionsIntoBlocks` otherwise answers
+by watching for gaps in the session numbering. On 1 January 2024 it puts Asif
+Farid's three session numbers in one class; a third of the instructor-days in
+that file are the same shape, and counted by session number they would read as
+two or three half days where one class ran.
+
+**The newer export is the whole record, not one month** — the file we were
+given runs from January 2024 to October 2026, 74,782 rows across 34 months.
+The month cannot be read off a file like that, so the record-sheet card offers
+it: pick one and the rest of the app is handed a record sheet that is about
+that month, which is how every downstream rule keeps working unchanged. The
+rows of the five weeks before it come too, because a course that started on
+the 30th and runs four days is taught on the 1st and the 2nd, and dropping its
+only row would turn those into days nobody delivered. A single-month file
+narrows to itself and the picker does not appear.
+
+Dates in the newer export are real Excel serials, not text, so there is no
+`dd/mm` against `mm/dd` to get wrong — worth saying because the file *displays*
+as `01/01/2024` and a text column of those would have been read the American
+way round and silently moved two thirds of the month.
 
 ### Freelancers
 

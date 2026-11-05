@@ -11,7 +11,11 @@ import {
   findMissingInstructors,
   type GeneratedSheet,
 } from "@/lib/incentives/generate";
-import { parseRecordSheet, type ParsedRecordSheet } from "@/lib/incentives/record";
+import {
+  parseRecordSheet,
+  recordForMonth,
+  type ParsedRecordSheet,
+} from "@/lib/incentives/record";
 import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
 import {
   buildBeforeAfterDoc,
@@ -94,6 +98,14 @@ export function IncentiveVerifier() {
    * writes it, beside the distances and the timecards, because it is a fact
    * about the person and not about any one month's sheet.
    */
+  /*
+   * Which month of the record sheet is being checked.
+   *
+   * The newer export is the whole record rather than one month, so the month
+   * is a choice. Held as "YYYY-M" and remembered, because a verifier works a
+   * month at a time and reopening the page should not throw that away.
+   */
+  const [monthKey, setMonthKey] = useState<string | null>(null);
   const [freelancers, setFreelancers] = useState<string[]>([]);
   const [freelanceRates, setFreelanceRates] = useState<FreelanceRates>(DEFAULT_FREELANCE_RATES);
 
@@ -113,6 +125,7 @@ export function IncentiveVerifier() {
         savedDecisions,
         savedLetter,
         savedFreelancers,
+        savedMonth,
         savedRates,
       ] = await Promise.all([
         getWorkbook("record"),
@@ -124,6 +137,7 @@ export function IncentiveVerifier() {
         getSetting<Record<string, Decision>>("incentive:decisions"),
         getWorkbook("lettertemplate"),
         getSetting<string[]>("incentive:freelancers"),
+        getSetting<string>("incentive:month"),
         getSetting<FreelanceRates>("incentive:freelanceRates"),
       ]);
       if (cancelled) return;
@@ -133,6 +147,7 @@ export function IncentiveVerifier() {
       if (savedDecisions) setDecisions(savedDecisions);
       if (savedLetter) setLetterTemplate({ name: savedLetter.name, data: savedLetter.data });
       if (savedFreelancers?.length) setFreelancers(savedFreelancers);
+      if (savedMonth) setMonthKey(savedMonth);
       // Rates saved before the allowance was known to be in dollars carry no
       // conversion, so the default peg fills itself in rather than reading NaN.
       if (savedRates) setFreelanceRates({ ...DEFAULT_FREELANCE_RATES, ...savedRates });
@@ -152,7 +167,8 @@ export function IncentiveVerifier() {
     };
   }, []);
 
-  const parsedRecord = useMemo<{ value: ParsedRecordSheet | null; error: string | null }>(() => {
+  /* The file as it stands, every month of it. */
+  const wholeRecord = useMemo<{ value: ParsedRecordSheet | null; error: string | null }>(() => {
     if (!record) return { value: null, error: null };
     try {
       return { value: parseRecordSheet(record.data), error: null };
@@ -160,6 +176,23 @@ export function IncentiveVerifier() {
       return { value: null, error: (e as Error).message };
     }
   }, [record]);
+
+  /*
+   * ...and the one month being checked.
+   *
+   * Everything downstream bounds itself to the record sheet's own month, so
+   * choosing one is a matter of handing the rest of the app a record sheet
+   * that is about that month. A file covering a single month narrows to
+   * itself and nothing changes.
+   */
+  const parsedRecord = useMemo<{ value: ParsedRecordSheet | null; error: string | null }>(() => {
+    const whole = wholeRecord.value;
+    if (!whole) return wholeRecord;
+    if (whole.months.length <= 1) return wholeRecord;
+    const chosen =
+      whole.months.find((m) => `${m.year}-${m.month}` === monthKey) ?? whole.months[0];
+    return { value: recordForMonth(whole, chosen.year, chosen.month), error: null };
+  }, [wholeRecord, monthKey]);
 
   const parsedCourses = useMemo<{ value: CourseCatalog | null; error: string | null }>(() => {
     if (!courses) return { value: null, error: null };
@@ -651,6 +684,12 @@ export function IncentiveVerifier() {
     }
   }, [letterData, reports, payable, draftedNames, monthLabel]);
 
+  const saveMonth = useCallback((key: string) => {
+    setMonthKey(key);
+    void putSetting("incentive:month", key);
+    setActive(ALL_SHEETS);
+  }, []);
+
   const saveFreelanceRates = useCallback((next: FreelanceRates) => {
     setFreelanceRates(next);
     void putSetting("incentive:freelanceRates", next);
@@ -790,13 +829,37 @@ export function IncentiveVerifier() {
           >
             {parsedRecord.error && <p className="text-xs text-[#B3261E]">{parsedRecord.error}</p>}
             {parsedRecord.value && (
-              <p className="text-xs leading-relaxed text-slate-ink">
-                <span className="font-bold text-navy">{record?.name}</span>
-                <br />
-                {parsedRecord.value.rows.length.toLocaleString("en-US")} certificates ·{" "}
-                {parsedRecord.value.instructors.length} instructors ·{" "}
-                {parsedRecord.value.monthLabel}
-              </p>
+              <>
+                <p className="text-xs leading-relaxed text-slate-ink">
+                  <span className="font-bold text-navy">{record?.name}</span>
+                  <br />
+                  {parsedRecord.value.dates.length.toLocaleString("en-US")} day
+                  {parsedRecord.value.dates.length === 1 ? "" : "s"} ·{" "}
+                  {parsedRecord.value.instructors.length} instructors ·{" "}
+                  {parsedRecord.value.monthLabel}
+                </p>
+                {/* A whole-record export covers dozens of months, and the one
+                    being checked cannot be read off the file. */}
+                {(wholeRecord.value?.months.length ?? 0) > 1 && (
+                  <label className="no-print mt-2 flex flex-wrap items-center gap-1.5 text-xs font-bold text-navy">
+                    Check
+                    <select
+                      value={`${parsedRecord.value.year}-${parsedRecord.value.month}`}
+                      onChange={(e) => saveMonth(e.target.value)}
+                      className="rounded-md border border-hairline bg-white px-2 py-1 text-xs font-medium text-navy outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+                    >
+                      {wholeRecord.value?.months.map((m) => (
+                        <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                          {m.label} ({m.rows.toLocaleString("en-US")})
+                        </option>
+                      ))}
+                    </select>
+                    <span className="font-medium text-slate-ink">
+                      of {wholeRecord.value?.months.length} months in this file
+                    </span>
+                  </label>
+                )}
+              </>
             )}
           </FileSlot>
 

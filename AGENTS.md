@@ -37,6 +37,27 @@ under *Incentive verification*; the short version is that a day is valued from
 the course list, sessions are grouped into classes before they are counted, and
 anything the evidence cannot settle is reported rather than guessed.
 
+Two record-sheet layouts are read (`COLUMNS` in `record.ts`): the older
+CertNo / StudentName / PrintedCourseName / IssuedOn export, and the newer
+Participant's Name / Course Name / Actual Date / Actual Sessions one, which
+has no certificate number. Only four columns are required — instructor,
+course, date, session — because requiring more turns a renamed column into a
+workbook the app refuses. Add a spelling to the alias list rather than a
+second parser.
+
+Where the newer export's `Actual Sessions` column is present,
+`groupSessionsIntoBlocks` groups by it and skips the session-number-gap
+heuristic entirely: it is the office stating which rows are one class, and a
+third of the instructor-days in that file disagree with what counting session
+numbers would give. Do not "improve" it back to inferring.
+
+That export is the whole record, not one month (34 months in the file we were
+given), so `recordForMonth` narrows it and everything downstream keeps reading
+`year` / `month` / `monthLabel` off the narrowed sheet as before. It carries
+five weeks of lead-in rows so multi-day courses that start in the previous
+month still resolve. Its dates are real Excel serials, so do not add dd/mm
+text parsing on their account.
+
 Trainers fill these sheets by hand, so the parser matches on wording and not on
 row numbers, and dates, names, session numbers and durations all arrive in
 several spellings. Before changing a parsing rule, check it against every sheet

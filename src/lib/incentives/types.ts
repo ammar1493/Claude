@@ -26,6 +26,12 @@ export interface CourseDuration {
 /** One certificate row of the Record Sheet. */
 export interface RecordRow {
   certNo: string;
+  /**
+   * The office's own name for the class this row belongs to, when the export
+   * carries one — course, instructor and date rolled together. Empty on the
+   * older exports, which leave the grouping to be worked out.
+   */
+  classKey: string;
   studentName: string;
   clientName: string;
   instructorName: string;
