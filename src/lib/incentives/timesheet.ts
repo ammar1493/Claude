@@ -186,6 +186,39 @@ export function targetKind(
   return weekday === FRIDAY && hasFriday ? "friday" : "daily";
 }
 
+/**
+ * Every rate line a day's ticks belong on \u2014 usually one, two when the day was
+ * a morning class and an afternoon one.
+ *
+ * The form carries a morning line and an afternoon line precisely so a day
+ * built out of two classes reads as two classes, and 50 plus 50 is the same
+ * 100 as the full-day line, so nobody is paid differently for it. A full-day
+ * course that shared its day with another course did not run a full day
+ * either, whatever the course list says it runs to.
+ *
+ * Only the NEFT band, and only on an ordinary weekday: Friday and Saturday
+ * have a single half-day line and a single full-day line with no morning or
+ * afternoon to them, and the distance bands pay one flat day rate.
+ */
+export function dayKinds(
+  sheet: IncentiveSheet,
+  section: ClaimSection,
+  weekday: number,
+  days: number,
+  /** Classes the record sheet shows for the day. */
+  classes = 1,
+): ClaimKind[] {
+  if (days <= 0) return [];
+  const splits =
+    section === "near" &&
+    classes >= 2 &&
+    days > 0.5 &&
+    expectedKinds(weekday).half === "halfAM";
+  if (splits) return ["halfAM", "halfPM"];
+  const one = targetKind(sheet, section, weekday, days);
+  return one ? [one] : [];
+}
+
 /** The cell a rate line's tick for a day of the month goes in. */
 export function claimCell(
   sheet: IncentiveSheet,

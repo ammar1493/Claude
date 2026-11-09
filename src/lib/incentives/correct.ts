@@ -1,9 +1,10 @@
 import { freelanceNote, freelanceSarRate } from "./freelance";
 import { highlightGrid, highlightLog } from "./highlight";
-import { logLinesForDay, type LogLine } from "./logLines";
+import { FULL_DAY_LABEL, logLinesForDay, type LogLine } from "./logLines";
+import { dayKey } from "./record";
 import { describeTimecard } from "./timecards";
 import { claimCell, KIND_LABELS } from "./timesheet";
-import type { CellEdit, Finding, FreelanceRates, SheetReport } from "./types";
+import type { CellEdit, ClaimKind, Finding, FreelanceRates, SheetReport } from "./types";
 import {
   StyleTable,
   forceRecalc,
@@ -258,17 +259,63 @@ export async function buildCorrectedWorkbook(
   /* The verification log, rebuilt from the evidence if asked. */
   if (options.rebuildLog && xml.verification && sheet.verificationLayout) {
     const layout = sheet.verificationLayout;
-    // Continuations belong on the log as much as first days do: a four-day
-    // WellSharp is taught on all four, and a log that only names the day the
-    // certificates were issued reads as three days of nothing.
-    const lines: LogLine[] = report.days.flatMap((day) =>
-      logLinesForDay({
+    /*
+     * The log describes the corrected grid, not the record sheet.
+     *
+     * Everything the sheet still claims after your rulings belongs here \u2014 a
+     * travelling day, a session the record sheet never recorded that you let
+     * stand \u2014 because a day that is paid and absent from the log reads to
+     * whoever signs it as a day somebody invented. A tick you cleared drops
+     * out for the same reason.
+     *
+     * Continuations belong on it as much as first days do: a four-day
+     * WellSharp is taught on all four, and a log that only names the day the
+     * certificates were issued reads as three days of nothing.
+     */
+    const survivors = new Map<number, ClaimKind[]>();
+    for (const row of previewRows(report, plan)) {
+      const source = sheet.rows.find((r) => r.rowIndex === row.rowIndex);
+      if (!source || source.dayValue <= 0) continue;
+      for (const day of row.days) {
+        survivors.set(day, [...(survivors.get(day) ?? []), source.kind]);
+      }
+    }
+
+    /** The trainer's own account of a date, in their words. */
+    const written = new Map<string, LogLine[]>();
+    for (const entry of sheet.verification) {
+      if (!entry.date || !entry.courseName) continue;
+      const key = dayKey(entry.date);
+      written.set(key, [
+        ...(written.get(key) ?? []),
+        {
+          date: entry.date,
+          course: entry.courseName,
+          location: entry.location,
+          session: entry.sessionNo,
+          duration: entry.durationLabel || FULL_DAY_LABEL,
+        },
+      ]);
+    }
+
+    const lines: LogLine[] = report.days.flatMap((day) => {
+      const kinds = survivors.get(day.date.getDate()) ?? [];
+      // Nothing is claimed for this date any more.
+      if (!kinds.length) return [];
+      const classes =
+        (day.record?.blocks.length ?? 0) + (day.record?.continuations.length ?? 0);
+      const mine = written.get(day.key) ?? [];
+      return logLinesForDay({
         date: day.date,
         record: day.record,
         covers: day.covers,
         standby: day.standby,
-      }),
-    );
+        travel: kinds.includes("travel"),
+        travelLocation: mine[0]?.location || day.sites[0] || "",
+        splitHalves: classes >= 2,
+        claimed: mine,
+      });
+    });
     lines.sort((a, b) => a.date.getTime() - b.date.getTime());
 
     let row = layout.headerRow + 1;

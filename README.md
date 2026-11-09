@@ -190,6 +190,30 @@ print setting the community build cannot round-trip. Of the 26 parts in a
 typical sheet, three change: the two tabs and `workbook.xml`, which gains
 `fullCalcOnLoad` so Excel recalculates on open.
 
+**The rewritten log describes the corrected grid**, not the record sheet.
+Everything the sheet still claims once you have ruled on it belongs there,
+because a day that is paid and missing from the log reads to whoever signs it
+as a day somebody invented:
+
+- A **travelling or standby day** has nothing in the record sheet — that is
+  what a travelling day is — so it goes down as *Travelling / Standby*, with
+  *Outbound* in the Duration column, the third value the dropdown offers.
+- A **session the record sheet never recorded**, which you looked at and let
+  stand, keeps the trainer's own line word for word: their course name, their
+  location, their session number, their duration. It is the only account of
+  that day anybody has.
+- A tick you **cleared** drops out, for the same reason the others go in.
+
+**Two classes in a day are a morning and an afternoon.** The form carries a
+line for each, 50 and 50 is the same 100 as the full-day line, and a day built
+out of two classes should read as two classes. That holds even when one of
+them is a full-day course: it cannot have run a full day on a date that held
+another class as well, so both go down as half days and the log says *Half
+Day* against each. In August that is 79 of the 224 instructor-days — 70 pairs
+of half days and 9 where a full-day course shared its date. Three classes in a
+day still tick a morning and an afternoon, because the form has nowhere else
+to put them, and the log lists all three.
+
 Optionally the **verification log is rewritten from the record sheet** — one
 line per session actually delivered, with its real session number and the
 duration the course list gives it, plus any timecard days and the continuation

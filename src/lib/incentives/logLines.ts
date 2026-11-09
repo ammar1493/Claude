@@ -36,6 +36,10 @@ export const FULL_DAY_LABEL = "Full Day";
 
 /** What the office calls a day it was called in for and did not teach. */
 export const STANDBY_COURSE = "Standby";
+/** ...and a day spent getting somewhere, or waiting there. */
+export const TRAVEL_COURSE = "Travelling / Standby";
+/** The third value in the Duration dropdown: a day at a distance band. */
+export const OUTBOUND_LABEL = "Outbound";
 
 export interface LogDay {
   date: Date;
@@ -43,6 +47,33 @@ export interface LogDay {
   covers: TimecardCover[];
   /** A Friday or Saturday claimed with no course behind it. */
   standby?: boolean;
+  /**
+   * A travelling or standby day whose tick survived the corrections.
+   *
+   * The record sheet has nothing for it \u2014 that is what a travelling day is \u2014
+   * so without this the date would be paid and not appear in the log at all.
+   */
+  travel?: boolean;
+  /** Where the trainer said that travelling day was. */
+  travelLocation?: string;
+  /**
+   * Two or more classes in the day, so each is written as a half.
+   *
+   * A full-day course that shared its day with another course did not run a
+   * full day, whatever the course list says it runs to; and two half days are
+   * a morning and an afternoon rather than one full day. The claim grid is
+   * ticked to match.
+   */
+  splitHalves?: boolean;
+  /**
+   * The trainer's own lines for this date.
+   *
+   * Used only when nothing else backs the day: a session the record sheet
+   * never recorded, which the verifier has looked at and let stand. Their
+   * wording is kept as they wrote it, because it is the only account of what
+   * happened that anybody has.
+   */
+  claimed?: LogLine[];
 }
 
 export function logLinesForDay(day: LogDay): LogLine[] {
@@ -73,8 +104,10 @@ export function logLinesForDay(day: LogDay): LogLine[] {
       course: block.courseNames.join(" + "),
       location: block.locations.join(", "),
       session: block.sessionNos.join(", "),
-      // One day of it, whatever the whole course runs to.
-      duration: block.dayValue <= 0.5 ? HALF_DAY_LABEL : FULL_DAY_LABEL,
+      // One day of it, whatever the whole course runs to \u2014 and half of one
+      // where the day held another class as well.
+      duration:
+        day.splitHalves || block.dayValue <= 0.5 ? HALF_DAY_LABEL : FULL_DAY_LABEL,
     });
   }
 
@@ -86,6 +119,25 @@ export function logLinesForDay(day: LogDay): LogLine[] {
       session: cover.timecard.attachmentName ?? "timecard",
       duration: FULL_DAY_LABEL,
     });
+  }
+
+  if (day.travel) {
+    lines.push({
+      date: day.date,
+      course: TRAVEL_COURSE,
+      location: day.travelLocation ?? "",
+      session: "",
+      duration: OUTBOUND_LABEL,
+    });
+  }
+
+  /*
+   * Last, and only if the day would otherwise be blank: a session nobody
+   * recorded, which the verifier has seen and let stand. A paid day missing
+   * from the log reads as one somebody invented.
+   */
+  if (!lines.length && day.claimed?.length) {
+    lines.push(...day.claimed.map((l) => ({ ...l, date: day.date })));
   }
 
   return lines;

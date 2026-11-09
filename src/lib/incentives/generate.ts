@@ -6,8 +6,9 @@ import { nameSimilarity } from "./names";
 import { addDays, buildRecordDays, dayKey, type ParsedRecordSheet } from "./record";
 import { resolveBand, SiteTable, type NamedSite } from "./sites";
 import { cardsFor, coverageFor, describeTimecard, siteForTimecard } from "./timecards";
-import { claimCell, KIND_LABELS, SECTION_LABELS, targetKind } from "./timesheet";
+import { claimCell, dayKinds, KIND_LABELS, SECTION_LABELS, targetKind } from "./timesheet";
 import type {
+  ClaimKind,
   ClaimSection,
   FreelanceRates,
   IncentiveSheet,
@@ -289,22 +290,30 @@ export async function buildGeneratedWorkbook(
       );
     }
     const band = resolved.band ?? "near";
-    const kind = targetKind(template, band, date.getDay(), load);
-    const cell = kind ? claimCell(template, band, kind, date.getDate()) : null;
-    if (!cell || !kind) {
+    /* Two classes in a day are a morning and an afternoon, not a full day. */
+    const classes = (rec?.blocks.length ?? 0) + (rec?.continuations.length ?? 0);
+    const kinds = dayKinds(template, band, date.getDay(), load, classes);
+    const cells = kinds
+      .map((k) => ({ kind: k, cell: claimCell(template, band, k, date.getDate()) }))
+      .filter((c): c is { kind: ClaimKind; cell: string } => Boolean(c.cell));
+    if (!cells.length) {
       notes.push(
         `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}: the template has no ${SECTION_LABELS[band]} line for this day, so it was left blank.`,
       );
       continue;
     }
-    put("grid", cell, 1);
-    tickedByDay.set(date.getDate(), [...(tickedByDay.get(date.getDate()) ?? []), cell]);
+    for (const { kind, cell } of cells) {
+      put("grid", cell, 1);
+      tickedByDay.set(date.getDate(), [...(tickedByDay.get(date.getDate()) ?? []), cell]);
+      const row = template.rows.find((r) => r.section === band && r.kind === kind);
+      if (row) perRow.set(row.rowIndex, (perRow.get(row.rowIndex) ?? 0) + 1);
+    }
     ticked += 1;
     tickedValue += load;
-    const row = template.rows.find((r) => r.section === band && r.kind === kind);
-    if (row) perRow.set(row.rowIndex, (perRow.get(row.rowIndex) ?? 0) + 1);
 
-    logLines.push(...logLinesForDay({ date, record: rec, covers }));
+    logLines.push(
+      ...logLinesForDay({ date, record: rec, covers, splitHalves: classes >= 2 }),
+    );
   }
 
   /*

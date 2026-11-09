@@ -35,6 +35,7 @@ import {
   KIND_LABELS,
   SATURDAY,
   SECTION_LABELS,
+  dayKinds,
   targetKind,
 } from "./timesheet";
 import { DEFAULT_FREELANCE_RATES } from "./types";
@@ -398,18 +399,24 @@ export function verifySheet(
     weekday: number,
     days: number,
     day: number,
+    /** Classes the record sheet shows that day, which can make it two ticks. */
+    classes = 1,
   ): CellEdit[] | null => {
-    const kind = targetKind(sheet, section, weekday, days);
-    if (!kind) return clearEdits(cells);
-    const target = claimCell(sheet, section, kind, day);
-    if (!target) return null;
-    const edits = clearEdits(cells.filter((c) => c !== target));
-    edits.push({
-      sheet: "timesheet",
-      cell: target,
-      value: 1,
-      describe: `Tick ${target} — ${KIND_LABELS[kind]}`,
-    });
+    const kinds = dayKinds(sheet, section, weekday, days, classes);
+    if (!kinds.length) return clearEdits(cells);
+    const targets = kinds
+      .map((kind) => ({ kind, cell: claimCell(sheet, section, kind, day) }))
+      .filter((t): t is { kind: ClaimKind; cell: string } => Boolean(t.cell));
+    if (targets.length !== kinds.length) return null;
+    const edits = clearEdits(cells.filter((c) => !targets.some((t) => t.cell === c)));
+    for (const { kind, cell } of targets) {
+      edits.push({
+        sheet: "timesheet",
+        cell,
+        value: 1,
+        describe: `Tick ${cell} — ${KIND_LABELS[kind]}`,
+      });
+    }
     return edits;
   };
 
@@ -600,6 +607,10 @@ export function verifySheet(
   for (const report of [...dayReports.values()].sort((a, b) => a.key.localeCompare(b.key))) {
     const { date, weekday, record: rec, covers } = report;
     const teachingClaims = report.claims.filter((c) => c.row.dayValue > 0);
+    /* Classes the record sheet shows for the day. Two or more is a morning
+       and an afternoon rather than a full day, so every correction that puts
+       a tick back has to know. */
+    const dayBlocks = [...(report.record?.blocks ?? []), ...(report.record?.continuations ?? [])];
     const travelClaims = report.claims.filter((c) => c.row.kind === "travel");
     const bandClaims = report.claims.filter((c) => c.row.section === "mid" || c.row.section === "far");
     const nearClaims = report.claims.filter((c) => c.row.section === "near");
@@ -657,7 +668,7 @@ export function verifySheet(
         title: `Wrong rate line for a ${dayName}`,
         why: `${why} Move this tick to "${KIND_LABELS[rightKind]}"${rightRate !== null ? ` at ${sar(rightRate)}` : ""}.`,
         suggestion: `Move to "${KIND_LABELS[rightKind]}".`,
-        fix: retickEdits([cell], "near", weekday, row.dayValue, date.getDate()),
+        fix: retickEdits([cell], "near", weekday, row.dayValue, date.getDate(), dayBlocks.length),
         sheet: "timesheet",
         cells: [cell],
         date,
@@ -677,20 +688,23 @@ export function verifySheet(
      * costs nobody anything; it is about the sheet saying what happened, and
      * it is what the verification log is checked against.
      */
-    const halfBlocks = [...(rec?.blocks ?? []), ...(rec?.continuations ?? [])].filter(
-      (b) => b.dayValue <= 0.5,
-    );
     const fullTick = nearClaims.find((c) => c.row.kind === "full");
-    if (wantCategory === "weekday" && halfBlocks.length >= 2 && fullTick) {
+    if (wantCategory === "weekday" && dayBlocks.length >= 2 && fullTick) {
       const amCell = claimCell(sheet, "near", "halfAM", date.getDate());
       const pmCell = claimCell(sheet, "near", "halfPM", date.getDate());
-      const courses = halfBlocks.map((b) => b.courseNames.join(" + "));
+      const courses = dayBlocks.map((b) => b.courseNames.join(" + "));
+      // A full-day course that shared its day did not run a full day, whatever
+      // the course list says it runs to; saying so is half the point here.
+      const hadFullDay = dayBlocks.some((b) => b.dayValue > 0.5);
       addDayFinding(report, {
         severity: "warning",
         code: "half-pair",
-        title: "Two half days claimed as one full day",
+        title: `${dayBlocks.length} classes claimed as one full day`,
         why:
-          `${fmtDate(date)} is two half-day classes \u2014 ${courses.join(" and ")} \u2014 but the sheet ticks "${KIND_LABELS.full}". ` +
+          `${fmtDate(date)} is ${courses.length} classes \u2014 ${courses.join(" and ")} \u2014 but the sheet ticks "${KIND_LABELS.full}". ` +
+          (hadFullDay
+            ? `One of them is a full-day course, but it cannot have run a full day on a date that held another class as well, so both go down as half days. `
+            : "") +
           `The form has a morning line and an afternoon line for exactly this, and the pair is worth the same as the full day, so the figure does not change. ` +
           `Tick "${KIND_LABELS.halfAM}" and "${KIND_LABELS.halfPM}" instead, so the sheet and the verification log both show the two classes.`,
         suggestion: `Tick the morning and afternoon lines instead of the full day.`,
@@ -998,6 +1012,7 @@ export function verifySheet(
           weekday,
           supportedDays,
           date.getDate(),
+          dayBlocks.length,
         ),
         sheet: "timesheet",
         cells: teachingClaims.map((c) => c.cell),

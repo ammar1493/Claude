@@ -78,6 +78,24 @@ The 2025 sheets still parse — section headings and rate-line wording are
 matched, not row numbers — and both forms are checked by the scripts before
 any parsing rule changes.
 
+The rebuilt verification log describes the **corrected claim grid**, not the
+record sheet: `correct.ts` reads the surviving ticks out of `previewRows` and
+only writes dates that still carry one. A travelling/standby tick becomes a
+*Travelling / Standby* / *Outbound* line, and a date with no evidence at all
+keeps the trainer's own verification line verbatim (`LogDay.claimed`). A paid
+day absent from the log reads as one somebody invented, which is the whole
+reason the log is there.
+
+`dayKinds` decides how many ticks a day gets: two or more classes on an
+ordinary weekday in the NEFT band go on the morning and afternoon lines rather
+than the full-day line, and the log writes every class as Half Day
+(`LogDay.splitHalves`). It is the same 100 either way. This covers both the
+two-half-days case and a full-day course that shared its date — it cannot
+have run a full day, whatever the course list says it runs to. Friday and
+Saturday have no morning/afternoon lines, so they are left alone, and
+`log-vs-grid` caps the logged total at one day, so three classes on one day
+raise nothing.
+
 Three rules about days are the office's, not inferences: a Friday or Saturday
 claimed with no course behind it is standby at half the weekend rate (near
 band only; the distance bands have their own standby line); two half-day
