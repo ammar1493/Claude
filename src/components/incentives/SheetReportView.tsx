@@ -58,6 +58,7 @@ export function SheetReportView({
   onDecideMany,
   onSetSite,
   onRemove,
+  onReport,
   freelanceRates,
 }: {
   report: SheetReport;
@@ -75,6 +76,8 @@ export function SheetReportView({
   onSetSite: (name: string, patch: Partial<SiteDistance>) => void;
   /** Take this sheet out of the month, from the page that shows it. */
   onRemove: () => void;
+  /** This trainer's own before-and-after report, day by day. */
+  onReport: () => void;
   /** The allowance, for a trainer the office has marked a freelancer. */
   freelanceRates: FreelanceRates;
 }) {
@@ -137,6 +140,17 @@ export function SheetReportView({
           <div className="no-print flex flex-wrap items-center gap-1.5">
             {/* Where the decision is actually made. A sheet that should not be
                 in the month is recognised while reading it, not from a list. */}
+            {/* The question you are holding on this page is what happened to
+                this trainer's sheet, so the report about it lives here. */}
+            <button
+              type="button"
+              onClick={onReport}
+              title="This trainer's month, day by day, claimed against verified."
+              className="flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-bold text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy"
+            >
+              <Icon name="document" size={14} />
+              Before / after
+            </button>
             <RemoveButton
               variant="labelled"
               what={report.sheet.instructorName || report.sheet.fileName}

@@ -323,6 +323,24 @@ the cell's own formatting plus the colour, appends it if it does not exist,
 and leaves every other record alone — so the rest of the workbook keeps
 pointing at exactly the style it pointed at before.
 
+### A report per trainer
+
+**Before / after** writes one report for each trainer rather than a single
+document listing everybody: a row for every day of their month, what ran on
+it, what the sheet asked for and what it pays after verification. On a
+trainer's own page the button writes theirs; in the header it writes one each
+and hands them back as a `.zip`, so a month is one click rather than twenty.
+Both are on the letterhead the office already sends out.
+
+The two figures come off the claim grid — the original ticks for *Claimed*,
+the ticks that survive the accepted corrections for *Verified* — so the
+column adds up to the figure in the letter rather than approximately to it,
+freelance rates included. A report whose rows do not sum to its own total is
+worse than no report, because the first person who checks it stops believing
+the rest of it. A trainer who sent nothing has a dash in *Claimed* and their
+name marked in the heading; the days are still there, because that is what
+the record sheet says they are owed.
+
 ### The month's letter
 
 Once every sheet has been ruled on, **Monthly Incentives (.docx)** writes the

@@ -150,6 +150,14 @@ total, so a template whose table has fewer than three rows is refused rather
 than guessed at. Clone through `stripIds()` — Word's `w14:paraId` must be
 unique per paragraph in a document.
 
+The before/after report is **per trainer**, never one document listing
+everybody — that was a misreading of "a report for each one incentive
+sheets" and the office said so. `dayComparisons` builds the rows off the claim
+grid (original ticks for Claimed, surviving ticks for Verified, freelance
+rates substituted where they apply) so they sum to `payableTotal` by
+construction; keep it that way rather than adding per-finding deltas, which
+would not.
+
 The figure that goes in the letter is what a sheet pays once its **accepted**
 corrections are applied (`payableTotal`), which for an unruled finding is what
 the trainer claimed. Anything that presents that number must say so; the

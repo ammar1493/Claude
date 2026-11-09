@@ -282,10 +282,27 @@ export interface BeforeAfterRow {
  * have to keep adding up to what they added up to before — so the name column
  * gives up the space the new column takes.
  */
+export interface BeforeAfterOptions {
+  /** Heading for the second column \u2014 "Name", or "Day" on a trainer's own. */
+  subject?: string;
+  /** Added after the month on the Month line, e.g. the trainer it is about. */
+  about?: string;
+  /** What the file is called, before the month is appended. */
+  fileNamePrefix?: string;
+  /**
+   * Whether a drafted row says so beside its name. True on the month's
+   * report, where the rows are trainers and one of them may not have sent a
+   * sheet; false on a trainer's own, where it belongs in the heading rather
+   * than repeated down every day of their month.
+   */
+  markDraftedRows?: boolean;
+}
+
 export async function buildBeforeAfterDoc(
   templateData: ArrayBuffer,
   rows: BeforeAfterRow[],
   monthLabel: string,
+  options?: BeforeAfterOptions,
 ): Promise<SummaryDocResult> {
   const entries = await readZip(templateData);
   const docEntry = entries.find((e) => e.name === "word/document.xml");
@@ -347,6 +364,7 @@ export async function buildBeforeAfterDoc(
   };
 
   let header = fourColumn(headerRow);
+  header = setCellText(header, 1, options?.subject ?? "Name");
   header = setCellText(header, 2, "Claimed");
   header = setCellText(header, 3, "Verified");
 
@@ -354,7 +372,8 @@ export async function buildBeforeAfterDoc(
     .map((row, i) => {
       let tr = stripIds(fourColumn(prototype));
       tr = setCellText(tr, 0, String(i + 1));
-      tr = setCellText(tr, 1, row.drafted ? `${row.name} (not received — drafted)` : row.name);
+      const marked = row.drafted && (options?.markDraftedRows ?? true);
+      tr = setCellText(tr, 1, marked ? `${row.name} (not received — drafted)` : row.name);
       tr = setCellText(tr, 2, row.drafted ? "—" : formatMoney(row.before));
       tr = setCellText(tr, 3, formatMoney(row.after));
       return tr;
@@ -378,15 +397,51 @@ export async function buildBeforeAfterDoc(
 
   const rebuilt = `${nextOpen}${header}${body}${filledTotal}</w:tbl>`;
   xml = xml.slice(0, table.index) + rebuilt + xml.slice(table.index + table[0].length);
-  xml = setMonthLabel(xml, monthLabel);
+  /* "August 2026 \u2014 Asif Farid": no year on the end, so setMonthLabel writes
+     the whole thing into the one run rather than splitting it. */
+  xml = setMonthLabel(xml, options?.about ? `${monthLabel} \u2014 ${options.about}` : monthLabel);
 
   docEntry.data = encoder.encode(xml);
 
-  const fileName = `Incentive verification ${monthLabel}.docx`
+  const fileName = `${options?.fileNamePrefix ?? "Incentive verification"} ${monthLabel}.docx`
     .replace(/[^\x20-\x7E]/g, " ")
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
 
   return { data: await writeZip(entries), fileName, rows: rows.length, total: afterTotal };
+}
+
+/**
+ * One trainer's month, before and after.
+ *
+ * The month's own report answered "what does each trainer get"; this answers
+ * "what happened to this one's sheet", which is the question you are holding
+ * when you sit down with them. A row per day, what ran on it, what the sheet
+ * asked for and what it pays, on the same letterhead as everything else the
+ * office sends out.
+ */
+export async function buildTrainerReportDoc(
+  templateData: ArrayBuffer,
+  about: {
+    who: string;
+    monthLabel: string;
+    drafted: boolean;
+    days: { day: number; what: string; before: number; after: number }[];
+  },
+): Promise<SummaryDocResult> {
+  const rows: BeforeAfterRow[] = about.days.map((d) => ({
+    name: `${d.day} ${about.monthLabel.split(" ")[0]} — ${d.what}`,
+    before: d.before,
+    after: d.after,
+    // The before column is only meaningless where no sheet was ever sent.
+    drafted: about.drafted,
+  }));
+
+  return buildBeforeAfterDoc(templateData, rows, about.monthLabel, {
+    subject: "Day",
+    about: about.drafted ? `${about.who} (no sheet received — drafted)` : about.who,
+    fileNamePrefix: `Incentive verification - ${about.who}`,
+    markDraftedRows: false,
+  });
 }

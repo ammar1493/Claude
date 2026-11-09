@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { CourseCatalog, parseCourseCatalog } from "@/lib/incentives/courses";
-import { payableTotal } from "@/lib/incentives/correct";
+import { dayComparisons, payableTotal } from "@/lib/incentives/correct";
+import { writeZip } from "@/lib/incentives/xlsxEdit";
 import { saveFile } from "@/lib/incentives/download";
 import { downloadFindingsWorkbook } from "@/lib/incentives/export";
 import {
@@ -18,8 +19,8 @@ import {
 } from "@/lib/incentives/record";
 import { SiteTable, bandForSite, collectSites, mergeSites, siteKey } from "@/lib/incentives/sites";
 import {
-  buildBeforeAfterDoc,
   buildSummaryDoc,
+  buildTrainerReportDoc,
   describeSummaryTemplate,
 } from "@/lib/incentives/summaryDoc";
 import { loadTemplate, templateLabel } from "@/lib/incentives/templates";
@@ -659,31 +660,55 @@ export function IncentiveVerifier() {
    * changed, and whose figure did nobody submit" \u2014 which is the question
    * anybody signing the letter asks next.
    */
-  const makeReport = useCallback(async () => {
-    setBusy("report-out");
-    setError(null);
-    try {
-      const rows = reports
-        .map((r) => ({
-          name: r.sheet.instructorName || r.matchedInstructor || r.sheet.fileName,
-          before: r.claimedTotal,
-          after: payable.get(r.sheet.fileName) ?? r.verifiedTotal,
-          drafted: draftedNames.has(r.sheet.fileName),
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
-      const out = await buildBeforeAfterDoc(await letterData(), rows, monthLabel || "");
-      await saveFile(
-        out.fileName,
-        new Blob([out.data as BlobPart], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        }),
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }, [letterData, reports, payable, draftedNames, monthLabel]);
+  /** One trainer's month, day by day, before and after. */
+  const reportFor = useCallback(
+    async (report: SheetReport) => {
+      const who = report.matchedInstructor || report.sheet.instructorName || report.sheet.fileName;
+      const rates = report.freelanceTotal !== null ? freelanceRates : null;
+      return buildTrainerReportDoc(await letterData(), {
+        who,
+        monthLabel: monthLabel || report.monthLabel || "",
+        drafted: draftedNames.has(report.sheet.fileName),
+        days: dayComparisons(report, accepted, rates),
+      });
+    },
+    [letterData, monthLabel, draftedNames, accepted, freelanceRates],
+  );
+
+  const makeReport = useCallback(
+    async (one?: SheetReport) => {
+      setBusy("report-out");
+      setError(null);
+      try {
+        const wanted = one ? [one] : reports;
+        if (!wanted.length) return;
+        const docs = [];
+        for (const r of wanted) docs.push(await reportFor(r));
+
+        /* One trainer, one file. More than one, a .zip of them \u2014 a single
+           document listing everybody is the thing the office did not want. */
+        if (docs.length === 1) {
+          await saveFile(
+            docs[0].fileName,
+            new Blob([docs[0].data as BlobPart], {
+              type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            }),
+          );
+          return;
+        }
+        const zip = await writeZip(docs.map((d) => ({ name: d.fileName, data: d.data })));
+        await saveFile(
+          `Incentive verification reports ${monthLabel}.zip`.replace(/\s+/g, " ").trim(),
+          new Blob([zip as BlobPart], { type: "application/zip" }),
+        );
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [reports, reportFor, monthLabel],
+  );
 
   const saveMonth = useCallback((year: number, month: number) => {
     const key = `${year}-${month}`;
@@ -761,11 +786,16 @@ export function IncentiveVerifier() {
                   type="button"
                   onClick={() => void makeReport()}
                   disabled={busy === "report-out"}
-                  title="Every sheet, claimed against verified — including the ones nobody sent."
+                  title="One report per trainer, claimed against verified, day by day."
                   className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-ink transition-colors duration-150 hover:bg-navy-050 hover:text-navy disabled:opacity-50"
                 >
                   <Icon name="document" size={14} />
                   Before / after
+                  {reports.length > 1 && (
+                    <span className="rounded bg-navy-050 px-1 text-[10px] font-bold text-navy">
+                      {reports.length}
+                    </span>
+                  )}
                 </button>
                 {
                   <button
@@ -1122,6 +1152,7 @@ export function IncentiveVerifier() {
                 onDecideMany={decideMany}
                 onSetSite={setSite}
                 onRemove={() => void removeSheet(reports[active].sheet.fileName)}
+                onReport={() => void makeReport(reports[active])}
                 freelanceRates={freelanceRates}
               />
             )}

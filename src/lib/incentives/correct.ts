@@ -425,3 +425,68 @@ export function describeFix(finding: Finding): string {
 }
 
 export { describeTimecard, KIND_LABELS };
+
+/* ------------------------------------------------------------------ *
+ * A trainer's month, day by day
+ * ------------------------------------------------------------------ */
+
+export interface DayComparison {
+  day: number;
+  date: Date | null;
+  /** What ran that day, or what the sheet claimed for it. */
+  what: string;
+  before: number;
+  after: number;
+}
+
+/**
+ * What each day of a trainer's month claimed, and what it pays.
+ *
+ * Both figures come off the claim grid — the original ticks for the before,
+ * the ticks that survive the accepted corrections for the after — so the
+ * column adds up to the figure the letter carries rather than approximately
+ * to it. A report whose rows do not sum to its own total is worse than no
+ * report, because the first person to check it stops believing the rest.
+ */
+export function dayComparisons(
+  report: SheetReport,
+  accepted: Set<string>,
+  freelance: FreelanceRates | null,
+): DayComparison[] {
+  const sheet = report.sheet;
+  const before = new Map<number, number>();
+  for (const row of sheet.rows) {
+    for (const day of row.days) {
+      if (day > 31) continue;
+      before.set(day, (before.get(day) ?? 0) + row.rate);
+    }
+  }
+
+  const after = new Map<number, number>();
+  for (const preview of previewRows(report, buildPlan(report, accepted))) {
+    const source = sheet.rows.find((r) => r.rowIndex === preview.rowIndex);
+    if (!source) continue;
+    // A freelancer's day is worth their allowance, not the form's rate line.
+    const rate = (freelance ? freelanceSarRate(source, freelance) : null) ?? source.rate;
+    for (const day of preview.days) {
+      after.set(day, (after.get(day) ?? 0) + rate);
+    }
+  }
+
+  const byDay = new Map(report.days.map((d) => [d.date.getDate(), d]));
+  const days = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => a - b);
+
+  return days.map((day) => {
+    const entry = byDay.get(day) ?? null;
+    const blocks = [...(entry?.record?.blocks ?? []), ...(entry?.record?.continuations ?? [])];
+    const courses = blocks.map((b) => b.courseNames.join(" + ")).filter(Boolean);
+    const kinds = entry?.claims.map((c) => KIND_LABELS[c.row.kind]) ?? [];
+    return {
+      day,
+      date: entry?.date ?? null,
+      what: courses.length ? courses.join("; ") : [...new Set(kinds)].join(", ") || "—",
+      before: before.get(day) ?? 0,
+      after: after.get(day) ?? 0,
+    };
+  });
+}
