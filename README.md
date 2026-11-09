@@ -180,7 +180,10 @@ The claim grid doubles as the preview: an accepted correction strikes through
 the tick it clears and marks the one it adds, so the grid reads as the
 corrected sheet before anything is generated.
 
-**Generate the corrected sheet** then writes that file. It is the trainer's own
+**Generate the corrected sheet** then writes that file. Its Month cell and
+its file name carry the month it was checked against, not the one the trainer
+typed — sheets get copied forward from last year and left saying January,
+which the verifier reports and the corrected copy now puts right. It is the trainer's own
 workbook — same template, same rates, same signature blocks — with only the
 accepted cells rewritten and the totals recalculated. That is not a figure of
 speech: `xlsxEdit.ts` edits the `<c>` elements inside the sheet XML and copies

@@ -1818,6 +1818,7 @@ export function verifySheet(
     days: [...dayReports.values()].sort((a, b) => a.key.localeCompare(b.key)),
     claimedTotal,
     computedTotal,
+    monthLabel: record.monthLabel,
     freelanceTotal,
     // A freelancer's month is priced from their own allowance, so the staff
     // rate table's arithmetic \u2014 and the corrections to it \u2014 do not decide

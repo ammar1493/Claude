@@ -209,6 +209,26 @@ export async function buildCorrectedWorkbook(
   for (const edit of plan.edits) write(edit.sheet, edit.cell, edit.value, edit.describe);
 
   /*
+   * The month the sheet is for.
+   *
+   * Trainers copy last year's workbook forward and leave the Month cell
+   * saying January, which the verifier reports \u2014 and then the corrected copy
+   * went out still saying January, because nothing rewrote it. A sheet
+   * corrected against August's record sheet is a sheet for August.
+   */
+  if (sheet.monthCell && report.monthLabel && xml.timesheet) {
+    const outcome = setCell(xml.timesheet, sheet.monthCell, report.monthLabel);
+    xml.timesheet = outcome.xml;
+    if (outcome.applied) {
+      if (sheet.monthLabel !== report.monthLabel) {
+        applied.push(`${sheet.monthCell}: month set to ${report.monthLabel}.`);
+      }
+    } else {
+      skipped.push(outcome.skipped ?? `${sheet.monthCell} could not be set to the month.`);
+    }
+  }
+
+  /*
    * A freelancer's day rates, written where the staff rates were.
    *
    * The ticks are right either way \u2014 they say which days were worked and in
@@ -387,7 +407,8 @@ export async function buildCorrectedWorkbook(
   if (workbookXml) setEntryText(book, "xl/workbook.xml", forceRecalc(workbookXml));
 
   const who = report.matchedInstructor ?? sheet.instructorName ?? "instructor";
-  const month = sheet.monthLabel || "";
+  // The month it was checked against, not the one the trainer typed.
+  const month = report.monthLabel || sheet.monthLabel || "";
   return {
     data: await saveWorkbook(book),
     fileName: safeFileName(`${who}${month ? ` ${month}` : ""} corrected.xlsx`),

@@ -78,6 +78,14 @@ The 2025 sheets still parse — section headings and rate-line wording are
 matched, not row numbers — and both forms are checked by the scripts before
 any parsing rule changes.
 
+`SheetReport.monthLabel` is the month the sheet was **checked against**;
+`sheet.monthLabel` is whatever the trainer typed in the Month cell, which is
+often last year's because the workbook was copied forward. The corrected copy
+writes the first into the Month cell and uses it for the file name — it had
+been keeping the trainer's, so a sheet corrected against August went out
+saying January. Anything naming the month of a corrected sheet wants
+`report.monthLabel`.
+
 The rebuilt verification log describes the **corrected claim grid**, not the
 record sheet: `correct.ts` reads the surviving ticks out of `previewRows` and
 only writes dates that still carry one. A travelling/standby tick becomes a

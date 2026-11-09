@@ -340,6 +340,14 @@ export interface SheetReport {
   /** What the ticks add up to at the sheet's own rates. */
   computedTotal: number;
   /** computedTotal after every priced correction. */
+  /**
+   * The month this sheet was checked against, from the record sheet.
+   *
+   * Not the same as `sheet.monthLabel`, which is whatever the trainer typed
+   * in the Month cell — often last year's, because the sheet was copied
+   * forward. The corrected copy is written for this month, not that one.
+   */
+  monthLabel: string;
   verifiedTotal: number;
   /**
    * What the month comes to at the freelance teaching allowance, or null for
