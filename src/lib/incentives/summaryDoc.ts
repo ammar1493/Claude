@@ -41,6 +41,22 @@ export function formatMoney(n: number, decimals = 0): string {
 }
 
 /**
+ * A figure in a row of the table, the way the office writes one.
+ *
+ * Whole riyals go in bare and a fraction of one keeps its halalas — the
+ * office's own letter has 1,850 and 421.88 three rows apart. Writing every
+ * row whole would round that 421.88 to 422, which is a figure nobody is
+ * paid and a riyal the column cannot account for against the total printed
+ * underneath it. Freelance days are where this bites: the allowance is
+ * quoted in dollars, so a half day comes to 140.625 riyals and almost
+ * nothing in a freelancer's month lands on a whole one.
+ */
+function rowMoney(n: number): string {
+  const riyals = Math.round(n * 100) / 100;
+  return formatMoney(riyals, Number.isInteger(riyals) ? 0 : 2);
+}
+
+/**
  * Replace the text of every run in a row's nth cell.
  *
  * A cell holds one run of text in this template; writing into the first and
@@ -204,7 +220,7 @@ export async function buildSummaryDoc(
       let tr = stripIds(prototype);
       tr = setCellText(tr, 0, String(i + 1));
       tr = setCellText(tr, 1, row.name);
-      tr = setCellText(tr, 2, formatMoney(row.amount));
+      tr = setCellText(tr, 2, rowMoney(row.amount));
       return tr;
     })
     .join("");
@@ -374,8 +390,8 @@ export async function buildBeforeAfterDoc(
       tr = setCellText(tr, 0, String(i + 1));
       const marked = row.drafted && (options?.markDraftedRows ?? true);
       tr = setCellText(tr, 1, marked ? `${row.name} (not received — drafted)` : row.name);
-      tr = setCellText(tr, 2, row.drafted ? "—" : formatMoney(row.before));
-      tr = setCellText(tr, 3, formatMoney(row.after));
+      tr = setCellText(tr, 2, row.drafted ? "—" : rowMoney(row.before));
+      tr = setCellText(tr, 3, rowMoney(row.after));
       return tr;
     })
     .join("");

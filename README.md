@@ -351,6 +351,13 @@ letterhead, the three signature blocks, the table's fills and the page setup
 come through untouched. Of the 15 parts in the template, one changes:
 `word/document.xml`.
 
+A row's figure is written the way the office writes one: whole riyals bare,
+and a fraction of one with its halalas, so 1,850 and 421.88 can sit three
+rows apart as they do in the office's own letter. Freelance months are where
+that matters — the allowance is quoted in dollars, so a half day comes to
+140.625 riyals and almost nothing lands on a whole one. The total keeps its
+two decimals either way.
+
 The figure in each row is what the sheet **will pay**, not what it claimed and
 not what the rules alone verified: a correction only counts once somebody has
 accepted it. So the summary carries a **To rule on** count per sheet, and the
